@@ -105,6 +105,75 @@ body {
   cursor: default;
 }
 
+.cooking-loader {
+  position: relative;
+  height: 150px;
+  margin-bottom: 16px;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  background: var(--card-bg);
+  overflow: hidden;
+}
+
+.cooking-loader__emoji {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 1.8rem;
+  line-height: 1;
+  will-change: transform;
+}
+
+.cooking-loader__emoji--1 { animation: run1 3.1s ease-in-out infinite; }
+.cooking-loader__emoji--2 { animation: run2 2.6s ease-in-out infinite; animation-delay: -0.3s; }
+.cooking-loader__emoji--3 { animation: run3 3.4s ease-in-out infinite; animation-delay: -0.9s; }
+.cooking-loader__emoji--4 { animation: run4 2.9s ease-in-out infinite; animation-delay: -1.5s; }
+
+@keyframes run1 {
+  0%   { transform: translate(4%, 10%) rotate(0deg); }
+  20%  { transform: translate(70%, 15%) rotate(25deg); }
+  40%  { transform: translate(85%, 65%) rotate(-15deg); }
+  60%  { transform: translate(30%, 80%) rotate(20deg); }
+  80%  { transform: translate(10%, 45%) rotate(-25deg); }
+  100% { transform: translate(4%, 10%) rotate(0deg); }
+}
+
+@keyframes run2 {
+  0%   { transform: translate(88%, 12%) rotate(0deg); }
+  25%  { transform: translate(18%, 5%) rotate(-30deg); }
+  50%  { transform: translate(8%, 55%) rotate(15deg); }
+  75%  { transform: translate(72%, 75%) rotate(-10deg); }
+  100% { transform: translate(88%, 12%) rotate(0deg); }
+}
+
+@keyframes run3 {
+  0%   { transform: translate(15%, 75%) rotate(10deg); }
+  30%  { transform: translate(58%, 85%) rotate(-20deg); }
+  55%  { transform: translate(88%, 38%) rotate(30deg); }
+  80%  { transform: translate(42%, 5%) rotate(-15deg); }
+  100% { transform: translate(15%, 75%) rotate(10deg); }
+}
+
+@keyframes run4 {
+  0%   { transform: translate(48%, 48%) rotate(0deg); }
+  20%  { transform: translate(5%, 22%) rotate(20deg); }
+  45%  { transform: translate(78%, 8%) rotate(-25deg); }
+  70%  { transform: translate(92%, 70%) rotate(15deg); }
+  100% { transform: translate(48%, 48%) rotate(0deg); }
+}
+
+.cooking-loader__text {
+  position: absolute;
+  bottom: 6px;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  margin: 0;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-sub);
+}
+
 .day-list {
   display: flex;
   flex-direction: column;

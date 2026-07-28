@@ -81,6 +81,18 @@ function DayCard({ day, preferences, onChooseVariant, onSetPreference }) {
   )
 }
 
+function CookingLoader() {
+  return (
+    <div className="cooking-loader" aria-hidden="true">
+      <span className="cooking-loader__emoji cooking-loader__emoji--1">🔪</span>
+      <span className="cooking-loader__emoji cooking-loader__emoji--2">🍴</span>
+      <span className="cooking-loader__emoji cooking-loader__emoji--3">🥄</span>
+      <span className="cooking-loader__emoji cooking-loader__emoji--4">👨‍🍳</span>
+      <p className="cooking-loader__text">献立を考え中…（30秒ほどかかります）</p>
+    </div>
+  )
+}
+
 export default function WeekPlanView({ weekId, weekPlan, preferences, loading, onGenerate, onShiftWeek, onChooseVariant, onSetPreference }) {
   return (
     <div>
@@ -94,21 +106,25 @@ export default function WeekPlanView({ weekId, weekPlan, preferences, loading, o
         {loading ? '生成中…' : weekPlan.length > 0 ? 'この週の献立を作り直す' : 'この週の献立を作る'}
       </button>
 
+      {loading && <CookingLoader />}
+
       {weekPlan.length === 0 && !loading && (
         <p className="empty-msg">まだこの週の献立がありません。「献立を作る」を押してください。</p>
       )}
 
-      <div className="day-list">
-        {weekPlan.map((day) => (
-          <DayCard
-            key={day.day_label}
-            day={day}
-            preferences={preferences}
-            onChooseVariant={onChooseVariant}
-            onSetPreference={onSetPreference}
-          />
-        ))}
-      </div>
+      {!loading && (
+        <div className="day-list">
+          {weekPlan.map((day) => (
+            <DayCard
+              key={day.day_label}
+              day={day}
+              preferences={preferences}
+              onChooseVariant={onChooseVariant}
+              onSetPreference={onSetPreference}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
