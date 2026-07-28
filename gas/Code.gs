@@ -144,7 +144,7 @@ function clearWeekRows_(sheet, hdr, weekId) {
   const data = sheet.getDataRange().getValues()
   const weekIdx = hdr.indexOf('week_id')
   for (let i = data.length - 1; i >= 1; i--) {
-    if (String(data[i][weekIdx]) === weekId) sheet.deleteRow(i + 1)
+    if (cellToStr(data[i][weekIdx]) === weekId) sheet.deleteRow(i + 1)
   }
 }
 
