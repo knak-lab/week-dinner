@@ -124,7 +124,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>週の晩ごはん</h1>
+        <h1>料理の鉄人</h1>
       </header>
 
       {!isGasReady() && (
