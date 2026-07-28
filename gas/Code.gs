@@ -16,7 +16,7 @@ const CHEAT_SHEET = 'CheatDaySetting'
 const CHEAT_HDR   = ['cheat_day']
 
 const DAY_LABELS = ['月', '火', '水', '木', '金', '土', '日']
-const SHOPPING_GROUPS = [['月', '火'], ['水', '木'], ['金', '土'], ['日']]
+const SHOPPING_GROUPS = [['月', '火', '水'], ['木', '金', '土'], ['日']]
 
 // ─────────────────────────────────────────
 //  ルーティング
