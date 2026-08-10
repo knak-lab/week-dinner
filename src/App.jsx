@@ -4,24 +4,35 @@ import { currentWeekId, shiftWeekId } from './utils/weekUtils'
 import WeekPlanView from './components/WeekPlanView'
 import ShoppingListView from './components/ShoppingListView'
 import SettingsView from './components/SettingsView'
+import CandidatesView from './components/CandidatesView'
+import LoadingOverlay from './components/LoadingOverlay'
+
+const REVEAL_DURATION_MS = 2500
 
 const TABS = [
   { id: 'plan', label: '献立' },
-  { id: 'shopping', label: '買い物リスト' },
+  { id: 'shopping', label: '買い物・食材' },
+  { id: 'candidates', label: '候補' },
   { id: 'settings', label: '設定' },
 ]
 
 export default function App() {
   const [weekId, setWeekId] = useState(currentWeekId())
   const [tab, setTab] = useState('plan')
-  const [weekData, setWeekData] = useState({ weekPlan: [], ingredients: [], styleTags: [], preferences: [], cheatDay: '' })
+  const [weekData, setWeekData] = useState({ weekPlan: [], ingredients: [], styleTags: [], preferences: [], favorites: [], cheatDay: '' })
   const [shoppingGroups, setShoppingGroups] = useState([])
-  const [loading, setLoading] = useState(false)
+  const [checkedShoppingItems, setCheckedShoppingItems] = useState(new Set())
+  const [stock, setStock] = useState([])
+  const [weekLoading, setWeekLoading] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [showReveal, setShowReveal] = useState(false)
   const [shoppingLoading, setShoppingLoading] = useState(false)
+  const [loadedShoppingWeekId, setLoadedShoppingWeekId] = useState(null)
+  const [stockLoading, setStockLoading] = useState(false)
   const [error, setError] = useState('')
 
   const loadWeek = useCallback(async (id) => {
-    setLoading(true)
+    setWeekLoading(true)
     setError('')
     try {
       const res = await gasApi.getWeek(id)
@@ -29,7 +40,7 @@ export default function App() {
     } catch (e) {
       setError(e.message)
     } finally {
-      setLoading(false)
+      setWeekLoading(false)
     }
   }, [])
 
@@ -38,6 +49,8 @@ export default function App() {
     try {
       const res = await gasApi.getShoppingList(id)
       setShoppingGroups(res.groups || [])
+      setCheckedShoppingItems(new Set(res.checked || []))
+      setLoadedShoppingWeekId(id)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -52,43 +65,102 @@ export default function App() {
 
   useEffect(() => {
     if (!isGasReady() || tab !== 'shopping') return
+    if (loadedShoppingWeekId === weekId) return
     loadShoppingList(weekId)
-  }, [tab, weekId, loadShoppingList])
+  }, [tab, weekId, loadedShoppingWeekId, loadShoppingList])
+
+  const loadStock = useCallback(async () => {
+    setStockLoading(true)
+    try {
+      const res = await gasApi.getStockIngredients()
+      setStock(res.ingredients || [])
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setStockLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isGasReady()) return
+    loadStock()
+  }, [loadStock])
 
   const handleGenerate = async () => {
-    setLoading(true)
+    setGenerating(true)
     setError('')
     try {
       const res = await gasApi.generateWeek(weekId)
       setWeekData(res)
+      setLoadedShoppingWeekId(null)
+      setGenerating(false)
+      setShowReveal(true)
+      setTimeout(() => setShowReveal(false), REVEAL_DURATION_MS)
     } catch (e) {
       setError(e.message)
-    } finally {
-      setLoading(false)
+      setGenerating(false)
     }
   }
 
   const handleShiftWeek = (delta) => setWeekId((id) => shiftWeekId(id, delta))
 
-  const handleChooseVariant = async (dayLabel, variant) => {
+  const handleChooseDish = async (dayLabel, dishId) => {
     setWeekData((prev) => ({
       ...prev,
-      weekPlan: prev.weekPlan.map((d) => d.day_label === dayLabel ? { ...d, chosen_variant: variant } : d),
+      weekPlan: prev.weekPlan.map((d) => d.day_label === dayLabel
+        ? { ...d, dishes: d.dishes.map((dish) => ({ ...dish, chosen: dish.dish_id === dishId ? 'true' : '' })) }
+        : d),
     }))
+    setLoadedShoppingWeekId(null)
     try {
-      await gasApi.setChosenVariant(weekId, dayLabel, variant)
+      await gasApi.setChosenDish(dishId)
     } catch (e) {
       setError(e.message)
     }
   }
 
-  const handleSetPreference = async (dishName, preference, dayLabel, variant) => {
+  const handleSetPreference = async (dish, dayLabel, preference) => {
+    const dishIngredients = weekData.ingredients
+      .filter((ing) => ing.dish_id === dish.dish_id)
+      .map((ing) => ({ name: ing.ingredient_name, amount: ing.amount }))
+
     setWeekData((prev) => ({
       ...prev,
-      preferences: [...prev.preferences, { dish_name: dishName, preference, week_id: weekId, day_label: dayLabel, variant }],
+      preferences: [...prev.preferences, { dish_name: dish.main, preference, week_id: weekId, day_label: dayLabel, dish_id: dish.dish_id }],
     }))
     try {
-      await gasApi.setPreference(dishName, preference, weekId, dayLabel, variant)
+      const res = await gasApi.setPreference(dish.main, preference, weekId, dayLabel, dish.dish_id, dish.side, dish.recipe, dishIngredients)
+      setWeekData((prev) => ({ ...prev, favorites: res.favorites }))
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  const handleAddDish = async (dayLabel, payload) => {
+    try {
+      const res = await gasApi.addDish(weekId, dayLabel, payload.main, payload.side, payload.recipe, payload.ingredients)
+      setWeekData(res)
+      setLoadedShoppingWeekId(null)
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  const handleAddDishFromFavorite = async (dayLabel, favId) => {
+    try {
+      const res = await gasApi.addDishFromFavorite(weekId, dayLabel, favId)
+      setWeekData(res)
+      setLoadedShoppingWeekId(null)
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  const handleMoveDish = async (dishId, targetDayLabel) => {
+    try {
+      const res = await gasApi.moveDish(dishId, targetDayLabel)
+      setWeekData(res)
+      setLoadedShoppingWeekId(null)
     } catch (e) {
       setError(e.message)
     }
@@ -112,6 +184,43 @@ export default function App() {
     }
   }
 
+  const handleAddStock = async (name, quantity) => {
+    try {
+      const res = await gasApi.addStockIngredient(name, quantity)
+      setStock(res.ingredients || [])
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  const handleCheckShoppingItem = (groupLabel, item) => {
+    const key = `${groupLabel}__${item.ingredient_name}`
+    setCheckedShoppingItems((prev) => new Set(prev).add(key))
+    handleAddStock(item.ingredient_name, item.amount)
+    gasApi.checkShoppingItem(weekId, groupLabel, item.ingredient_name).catch((e) => setError(e.message))
+  }
+
+  const handleStockQuantityChange = (id, quantity) => {
+    setStock((prev) => prev.map((i) => i.id === id ? { ...i, quantity } : i))
+  }
+
+  const handleStockQuantityCommit = async (id, quantity) => {
+    try {
+      await gasApi.updateStockIngredientQuantity(id, quantity)
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  const handleRemoveStock = async (id) => {
+    setStock((prev) => prev.filter((i) => i.id !== id))
+    try {
+      await gasApi.removeStockIngredient(id)
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
   const handleSetCheatDay = async (cheatDay) => {
     setWeekData((prev) => ({ ...prev, cheatDay }))
     try {
@@ -121,9 +230,61 @@ export default function App() {
     }
   }
 
+  const handleExtractDishFromImage = async (imageBase64, mimeType) => {
+    try {
+      return await gasApi.extractDishFromImage(imageBase64, mimeType)
+    } catch (e) {
+      setError(e.message)
+      throw e
+    }
+  }
+
+  const handleExtractDishFromText = async (text) => {
+    try {
+      return await gasApi.extractDishFromText(text)
+    } catch (e) {
+      setError(e.message)
+      throw e
+    }
+  }
+
+  const handleAddCandidate = async (main, recipe, ingredients, imageUrl, category) => {
+    try {
+      const res = await gasApi.addCandidate(main, recipe, ingredients, imageUrl, category)
+      setWeekData((prev) => ({ ...prev, favorites: res.favorites }))
+    } catch (e) {
+      setError(e.message)
+      throw e
+    }
+  }
+
+  const handleUpdateCandidate = async (favId, main, recipe, ingredients, category, imageUrl) => {
+    try {
+      const res = await gasApi.updateCandidate(favId, main, recipe, ingredients, category, imageUrl)
+      setWeekData((prev) => ({ ...prev, favorites: res.favorites }))
+    } catch (e) {
+      setError(e.message)
+      throw e
+    }
+  }
+
+  const handleRemoveCandidate = async (favId) => {
+    try {
+      const res = await gasApi.removeCandidate(favId)
+      setWeekData((prev) => ({ ...prev, favorites: res.favorites }))
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  const overlayPhase = showReveal ? 'reveal' : generating ? 'generating' : weekLoading ? 'loading' : null
+
   return (
     <div className="app">
+      <LoadingOverlay phase={overlayPhase} />
+
       <header className="app-header">
+        <img src={`${import.meta.env.BASE_URL}icon-512.png`} alt="" className="app-header__icon" />
         <h1>料理の鉄人</h1>
       </header>
 
@@ -151,15 +312,43 @@ export default function App() {
             weekId={weekId}
             weekPlan={weekData.weekPlan}
             preferences={weekData.preferences}
-            loading={loading}
+            ingredients={weekData.ingredients}
+            favorites={weekData.favorites}
+            loading={weekLoading || generating}
+            generating={generating}
             onGenerate={handleGenerate}
             onShiftWeek={handleShiftWeek}
-            onChooseVariant={handleChooseVariant}
+            onChooseDish={handleChooseDish}
             onSetPreference={handleSetPreference}
+            onAddDish={handleAddDish}
+            onAddDishFromFavorite={handleAddDishFromFavorite}
+            onMoveDish={handleMoveDish}
           />
         )}
         {tab === 'shopping' && (
-          <ShoppingListView groups={shoppingGroups} loading={shoppingLoading} />
+          <ShoppingListView
+            groups={shoppingGroups}
+            checkedItems={checkedShoppingItems}
+            loading={shoppingLoading}
+            stock={stock}
+            stockLoading={stockLoading}
+            onCheckItem={handleCheckShoppingItem}
+            onAddStock={handleAddStock}
+            onQuantityChange={handleStockQuantityChange}
+            onQuantityCommit={handleStockQuantityCommit}
+            onRemoveStock={handleRemoveStock}
+            onRegenerate={() => loadShoppingList(weekId)}
+          />
+        )}
+        {tab === 'candidates' && (
+          <CandidatesView
+            favorites={weekData.favorites}
+            onExtract={handleExtractDishFromImage}
+            onExtractText={handleExtractDishFromText}
+            onAddCandidate={handleAddCandidate}
+            onUpdateCandidate={handleUpdateCandidate}
+            onRemoveCandidate={handleRemoveCandidate}
+          />
         )}
         {tab === 'settings' && (
           <SettingsView

@@ -1,3 +1,170 @@
+import { useState } from 'react'
+
+const DAY_LABELS = ['月', '火', '水', '木', '金', '土', '日']
+
+function RecipeModal({ dayLabel, main, side, recipe, ingredients, onClose }) {
+  return (
+    <div className="recipe-modal-backdrop" onClick={onClose}>
+      <div className="recipe-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="recipe-modal__header">
+          <div>
+            <h3 className="recipe-modal__title">{dayLabel}：{main}</h3>
+            {side && <p className="recipe-modal__side">副菜：{side}</p>}
+          </div>
+          <button className="recipe-modal__close" onClick={onClose} aria-label="閉じる">×</button>
+        </div>
+
+        {ingredients.length > 0 && (
+          <>
+            <h4 className="recipe-modal__section-title">材料</h4>
+            <ul className="recipe-modal__ingredient-list">
+              {ingredients.map((ing) => (
+                <li key={ing.ingredient_name}>
+                  <span>{ing.ingredient_name}</span>
+                  <span className="recipe-modal__ingredient-amount">{ing.amount}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
+        <h4 className="recipe-modal__section-title">作り方</h4>
+        <div className="recipe-modal__body">{recipe || 'レシピが登録されていません。'}</div>
+      </div>
+    </div>
+  )
+}
+
+function AddChoiceModal({ dayLabel, hasFavorites, onSelectManual, onSelectFavorite, onClose }) {
+  return (
+    <div className="recipe-modal-backdrop" onClick={onClose}>
+      <div className="recipe-modal recipe-modal--narrow" onClick={(e) => e.stopPropagation()}>
+        <div className="recipe-modal__header">
+          <h3 className="recipe-modal__title">{dayLabel}に献立を追加</h3>
+          <button className="recipe-modal__close" onClick={onClose} aria-label="閉じる">×</button>
+        </div>
+        <div className="choice-list">
+          <button className="choice-btn" onClick={onSelectManual}>手動で登録</button>
+          <button className="choice-btn" onClick={onSelectFavorite} disabled={!hasFavorites}>
+            お気に入りから選ぶ{!hasFavorites && '（まだありません）'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ManualDishModal({ dayLabel, onSave, onClose }) {
+  const [main, setMain] = useState('')
+  const [side, setSide] = useState('')
+  const [recipe, setRecipe] = useState('')
+  const [ingredientRows, setIngredientRows] = useState([{ name: '', amount: '' }])
+
+  const updateIngredient = (idx, field, value) => {
+    setIngredientRows((prev) => prev.map((ing, i) => (i === idx ? { ...ing, [field]: value } : ing)))
+  }
+  const addIngredientRow = () => setIngredientRows((prev) => [...prev, { name: '', amount: '' }])
+  const removeIngredientRow = (idx) => setIngredientRows((prev) => prev.filter((_, i) => i !== idx))
+
+  const submit = (e) => {
+    e.preventDefault()
+    if (!main.trim()) return
+    const cleanIngredients = ingredientRows
+      .filter((ing) => ing.name.trim())
+      .map((ing) => ({ name: ing.name.trim(), amount: ing.amount.trim() }))
+    onSave({ main: main.trim(), side: side.trim(), recipe: recipe.trim(), ingredients: cleanIngredients })
+  }
+
+  return (
+    <div className="recipe-modal-backdrop" onClick={onClose}>
+      <div className="recipe-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="recipe-modal__header">
+          <h3 className="recipe-modal__title">{dayLabel}に手動で献立を登録</h3>
+          <button className="recipe-modal__close" onClick={onClose} aria-label="閉じる">×</button>
+        </div>
+
+        <form className="manual-form" onSubmit={submit}>
+          <label className="manual-form__label">メイン料理</label>
+          <input value={main} onChange={(e) => setMain(e.target.value)} placeholder="例：鮭の塩麹焼き" required />
+
+          <label className="manual-form__label">副菜</label>
+          <input value={side} onChange={(e) => setSide(e.target.value)} placeholder="例：ほうれん草の煮浸し" />
+
+          <label className="manual-form__label">材料</label>
+          <div className="manual-form__ingredients">
+            {ingredientRows.map((ing, idx) => (
+              <div className="manual-form__ing-row" key={idx}>
+                <input value={ing.name} onChange={(e) => updateIngredient(idx, 'name', e.target.value)} placeholder="食材名" />
+                <input value={ing.amount} onChange={(e) => updateIngredient(idx, 'amount', e.target.value)} placeholder="分量" />
+                <button type="button" className="manual-form__remove-ing" onClick={() => removeIngredientRow(idx)} aria-label="削除">×</button>
+              </div>
+            ))}
+            <button type="button" className="manual-form__add-ing" onClick={addIngredientRow}>+ 材料を追加</button>
+          </div>
+
+          <label className="manual-form__label">作り方</label>
+          <textarea value={recipe} onChange={(e) => setRecipe(e.target.value)} rows={5} placeholder={'1. …\n2. …'} />
+
+          <button type="submit" className="manual-form__submit">追加する</button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function FavoritePickerModal({ dayLabel, favorites, onSelect, onClose }) {
+  return (
+    <div className="recipe-modal-backdrop" onClick={onClose}>
+      <div className="recipe-modal recipe-modal--narrow" onClick={(e) => e.stopPropagation()}>
+        <div className="recipe-modal__header">
+          <h3 className="recipe-modal__title">{dayLabel}にお気に入りから追加</h3>
+          <button className="recipe-modal__close" onClick={onClose} aria-label="閉じる">×</button>
+        </div>
+        {favorites.length === 0 ? (
+          <p className="empty-msg">お気に入りがまだありません。</p>
+        ) : (
+          <ul className="favorite-list">
+            {favorites.map((f) => (
+              <li key={f.fav_id} className="favorite-list__item">
+                <div>
+                  <div className="favorite-list__main">{f.main}</div>
+                  {f.side && <div className="favorite-list__side">{f.side}</div>}
+                </div>
+                <button className="choose-btn" onClick={() => onSelect(f.fav_id)}>追加</button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function MoveDishModal({ currentDayLabel, onSelectDay, onClose }) {
+  return (
+    <div className="recipe-modal-backdrop" onClick={onClose}>
+      <div className="recipe-modal recipe-modal--narrow" onClick={(e) => e.stopPropagation()}>
+        <div className="recipe-modal__header">
+          <h3 className="recipe-modal__title">どの曜日に移動しますか？</h3>
+          <button className="recipe-modal__close" onClick={onClose} aria-label="閉じる">×</button>
+        </div>
+        <div className="day-picker">
+          {DAY_LABELS.map((d) => (
+            <button
+              key={d}
+              className="day-picker__btn"
+              onClick={() => onSelectDay(d)}
+              disabled={d === currentDayLabel}
+            >
+              {d}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function dishPreference(preferences, dishName) {
   if (!dishName) return null
   const rows = preferences.filter((p) => p.dish_name === dishName)
@@ -5,30 +172,58 @@ function dishPreference(preferences, dishName) {
   return rows[rows.length - 1].preference
 }
 
-function DayCard({ day, preferences, onChooseVariant, onSetPreference }) {
-  const isCheat = day.cheat === 'true' || day.cheat === true
-  const tags = (day.tags || '').split(',').filter(Boolean)
-  const chosen = day.chosen_variant || ''
-
-  if (isCheat) {
-    return (
-      <div className="day-card day-card--cheat">
-        <div className="day-card__header">
-          <span className="day-card__label">{day.day_label}</span>
-          <span className="day-card__date">{day.date}</span>
-        </div>
-        <div className="day-card__cheat-badge">チートデイ（外食・惣菜）</div>
-      </div>
-    )
-  }
-
-  const variants = [
-    { key: 'A', main: day.main_A, side: day.side_A },
-    { key: 'B', main: day.main_B, side: day.side_B },
-  ]
+function DishCard({ day, dish, index, preferences, onChooseDish, onSetPreference, onShowRecipe, onOpenMove }) {
+  const isChosen = dish.chosen === 'true' || dish.chosen === true
+  const pref = dishPreference(preferences, dish.main)
 
   return (
-    <div className="day-card">
+    <div className={`variant${isChosen ? ' variant--chosen' : ''}`}>
+      <div className="variant__header">
+        <span className="variant__badge">候補{index + 1}</span>
+        <div className="variant__actions">
+          <button className="recipe-btn" onClick={() => onShowRecipe(day, dish)} disabled={!dish.recipe}>
+            レシピ
+          </button>
+          <button className="move-btn" onClick={() => onOpenMove(dish, day.day_label)}>
+            移動
+          </button>
+          <button
+            className={`choose-btn${isChosen ? ' choose-btn--active' : ''}`}
+            onClick={() => onChooseDish(day.day_label, dish.dish_id)}
+          >
+            {isChosen ? '作った' : 'これを作る'}
+          </button>
+        </div>
+      </div>
+      <div className="variant__main">{dish.main}</div>
+      <div className="variant__side">{dish.side}</div>
+      {isChosen && (
+        <div className="variant__pref">
+          <button
+            className={`pref-btn${pref === 'like' ? ' pref-btn--active' : ''}`}
+            onClick={() => onSetPreference(dish, day.day_label, 'like')}
+          >
+            👍 好き
+          </button>
+          <button
+            className={`pref-btn${pref === 'dislike' ? ' pref-btn--active' : ''}`}
+            onClick={() => onSetPreference(dish, day.day_label, 'dislike')}
+          >
+            👎 苦手
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DayCard({ day, preferences, onChooseDish, onSetPreference, onShowRecipe, onOpenMove, onOpenAddChoice }) {
+  const isCheat = day.cheat === 'true' || day.cheat === true
+  const tags = (day.tags || '').split(',').filter(Boolean)
+  const dishes = day.dishes || []
+
+  return (
+    <div className={`day-card${isCheat ? ' day-card--cheat' : ''}`}>
       <div className="day-card__header">
         <span className="day-card__label">{day.day_label}</span>
         <span className="day-card__date">{day.date}</span>
@@ -39,61 +234,84 @@ function DayCard({ day, preferences, onChooseVariant, onSetPreference }) {
         )}
       </div>
 
-      <div className="day-card__variants">
-        {variants.map((v) => {
-          if (!v.main) return null
-          const isChosen = chosen === v.key
-          const pref = dishPreference(preferences, v.main)
-          return (
-            <div key={v.key} className={`variant${isChosen ? ' variant--chosen' : ''}`}>
-              <div className="variant__header">
-                <span className="variant__badge">案{v.key}</span>
-                <button
-                  className={`choose-btn${isChosen ? ' choose-btn--active' : ''}`}
-                  onClick={() => onChooseVariant(day.day_label, v.key)}
-                >
-                  {isChosen ? '作った' : 'これを作る'}
-                </button>
-              </div>
-              <div className="variant__main">{v.main}</div>
-              <div className="variant__side">{v.side}</div>
-              {isChosen && (
-                <div className="variant__pref">
-                  <button
-                    className={`pref-btn${pref === 'like' ? ' pref-btn--active' : ''}`}
-                    onClick={() => onSetPreference(v.main, 'like', day.day_label, v.key)}
-                  >
-                    👍 好き
-                  </button>
-                  <button
-                    className={`pref-btn${pref === 'dislike' ? ' pref-btn--active' : ''}`}
-                    onClick={() => onSetPreference(v.main, 'dislike', day.day_label, v.key)}
-                  >
-                    👎 苦手
-                  </button>
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+      {isCheat && dishes.length === 0 && (
+        <div className="day-card__cheat-badge">チートデイ（外食・惣菜）</div>
+      )}
+
+      {dishes.length > 0 && (
+        <div className="day-card__variants">
+          {dishes.map((dish, idx) => (
+            <DishCard
+              key={dish.dish_id}
+              day={day}
+              dish={dish}
+              index={idx}
+              preferences={preferences}
+              onChooseDish={onChooseDish}
+              onSetPreference={onSetPreference}
+              onShowRecipe={onShowRecipe}
+              onOpenMove={onOpenMove}
+            />
+          ))}
+        </div>
+      )}
+
+      <button className="add-dish-btn" onClick={() => onOpenAddChoice(day.day_label)}>
+        + 献立を追加
+      </button>
     </div>
   )
 }
 
-function CookingLoader() {
-  return (
-    <div className="cooking-loader" aria-hidden="true">
-      <span className="cooking-loader__emoji cooking-loader__emoji--1">🔪</span>
-      <span className="cooking-loader__emoji cooking-loader__emoji--2">🍴</span>
-      <span className="cooking-loader__emoji cooking-loader__emoji--3">🥄</span>
-      <span className="cooking-loader__emoji cooking-loader__emoji--4">👨‍🍳</span>
-      <p className="cooking-loader__text">献立を考え中…（30秒ほどかかります）</p>
-    </div>
-  )
-}
+export default function WeekPlanView({
+  weekId, weekPlan, preferences, ingredients, favorites, loading, generating,
+  onGenerate, onShiftWeek, onChooseDish, onSetPreference, onAddDish, onAddDishFromFavorite, onMoveDish,
+}) {
+  const [recipeModal, setRecipeModal] = useState(null)
+  const [addChoiceModal, setAddChoiceModal] = useState(null)
+  const [manualDishModal, setManualDishModal] = useState(null)
+  const [favoritePickerModal, setFavoritePickerModal] = useState(null)
+  const [moveDishModal, setMoveDishModal] = useState(null)
 
-export default function WeekPlanView({ weekId, weekPlan, preferences, loading, onGenerate, onShiftWeek, onChooseVariant, onSetPreference }) {
+  const handleShowRecipe = (day, dish) => {
+    const dishIngredients = ingredients.filter((ing) => ing.dish_id === dish.dish_id)
+    setRecipeModal({
+      dayLabel: day.day_label, main: dish.main, side: dish.side,
+      recipe: dish.recipe, ingredients: dishIngredients,
+    })
+  }
+
+  const openAddChoice = (dayLabel) => setAddChoiceModal({ dayLabel })
+
+  const openMove = (dish, dayLabel) => setMoveDishModal({ dishId: dish.dish_id, dayLabel })
+
+  const handleSelectManual = () => {
+    const dayLabel = addChoiceModal.dayLabel
+    setAddChoiceModal(null)
+    setManualDishModal({ dayLabel })
+  }
+
+  const handleSelectFavorite = () => {
+    const dayLabel = addChoiceModal.dayLabel
+    setAddChoiceModal(null)
+    setFavoritePickerModal({ dayLabel })
+  }
+
+  const handleManualSave = (payload) => {
+    onAddDish(manualDishModal.dayLabel, payload)
+    setManualDishModal(null)
+  }
+
+  const handleFavoriteSelect = (favId) => {
+    onAddDishFromFavorite(favoritePickerModal.dayLabel, favId)
+    setFavoritePickerModal(null)
+  }
+
+  const handleMoveSelectDay = (targetDayLabel) => {
+    onMoveDish(moveDishModal.dishId, targetDayLabel)
+    setMoveDishModal(null)
+  }
+
   return (
     <div>
       <div className="week-toolbar">
@@ -103,10 +321,8 @@ export default function WeekPlanView({ weekId, weekPlan, preferences, loading, o
       </div>
 
       <button className="generate-btn" onClick={onGenerate} disabled={loading}>
-        {loading ? '生成中…' : weekPlan.length > 0 ? 'この週の献立を作り直す' : 'この週の献立を作る'}
+        {generating ? '生成中…' : weekPlan.length > 0 ? 'この週の献立を作り直す' : 'この週の献立を作る'}
       </button>
-
-      {loading && <CookingLoader />}
 
       {weekPlan.length === 0 && !loading && (
         <p className="empty-msg">まだこの週の献立がありません。「献立を作る」を押してください。</p>
@@ -119,11 +335,51 @@ export default function WeekPlanView({ weekId, weekPlan, preferences, loading, o
               key={day.day_label}
               day={day}
               preferences={preferences}
-              onChooseVariant={onChooseVariant}
+              onChooseDish={onChooseDish}
               onSetPreference={onSetPreference}
+              onShowRecipe={handleShowRecipe}
+              onOpenMove={openMove}
+              onOpenAddChoice={openAddChoice}
             />
           ))}
         </div>
+      )}
+
+      {recipeModal && <RecipeModal {...recipeModal} onClose={() => setRecipeModal(null)} />}
+
+      {addChoiceModal && (
+        <AddChoiceModal
+          dayLabel={addChoiceModal.dayLabel}
+          hasFavorites={favorites.length > 0}
+          onSelectManual={handleSelectManual}
+          onSelectFavorite={handleSelectFavorite}
+          onClose={() => setAddChoiceModal(null)}
+        />
+      )}
+
+      {manualDishModal && (
+        <ManualDishModal
+          dayLabel={manualDishModal.dayLabel}
+          onSave={handleManualSave}
+          onClose={() => setManualDishModal(null)}
+        />
+      )}
+
+      {favoritePickerModal && (
+        <FavoritePickerModal
+          dayLabel={favoritePickerModal.dayLabel}
+          favorites={favorites}
+          onSelect={handleFavoriteSelect}
+          onClose={() => setFavoritePickerModal(null)}
+        />
+      )}
+
+      {moveDishModal && (
+        <MoveDishModal
+          currentDayLabel={moveDishModal.dayLabel}
+          onSelectDay={handleMoveSelectDay}
+          onClose={() => setMoveDishModal(null)}
+        />
       )}
     </div>
   )
