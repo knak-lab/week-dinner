@@ -674,6 +674,22 @@ body {
   align-items: flex-start;
 }
 
+.upload-form__source-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.upload-form__source-btn {
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
 .upload-form__text-input {
   width: 100%;
   padding: 8px;

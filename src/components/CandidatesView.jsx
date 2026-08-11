@@ -186,6 +186,7 @@ export default function CandidatesView({ favorites, onExtract, onExtractText, on
   const [editing, setEditing] = useState(null)
   const [search, setSearch] = useState('')
   const fileInputRef = useRef(null)
+  const cameraInputRef = useRef(null)
 
   const handleFileChange = async (e) => {
     const files = Array.from(e.target.files || [])
@@ -200,6 +201,7 @@ export default function CandidatesView({ favorites, onExtract, onExtractText, on
       setUploadError(err.message)
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = ''
+      if (cameraInputRef.current) cameraInputRef.current.value = ''
     }
   }
 
@@ -239,6 +241,7 @@ export default function CandidatesView({ favorites, onExtract, onExtractText, on
     setExtracted(null)
     setUploadError('')
     if (fileInputRef.current) fileInputRef.current.value = ''
+    if (cameraInputRef.current) cameraInputRef.current.value = ''
   }
 
   const switchMode = (mode) => {
@@ -284,7 +287,16 @@ export default function CandidatesView({ favorites, onExtract, onExtractText, on
 
         {!editing && !extracted && inputMode === 'image' && (
           <div className="upload-form">
-            <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileChange} />
+            <div className="upload-form__source-buttons">
+              <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileChange} style={{ display: 'none' }} />
+              <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={handleFileChange} style={{ display: 'none' }} />
+              <button type="button" className="upload-form__source-btn" onClick={() => fileInputRef.current?.click()}>
+                ファイルを選択
+              </button>
+              <button type="button" className="upload-form__source-btn" onClick={() => cameraInputRef.current?.click()}>
+                カメラで撮影
+              </button>
+            </div>
             <p className="upload-form__hint">1枚のスクショで収まらない場合は複数枚選択できます</p>
             {previews.length > 0 && (
               <div className="upload-form__preview-list">
