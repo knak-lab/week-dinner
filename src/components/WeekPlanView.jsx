@@ -268,17 +268,21 @@ function DishCard({ day, dish, index, preferences, onChooseDish, onSetPreference
 }
 
 function DishSection({ kind, day, dishes, preferences, onChooseDish, onSetPreference, onShowRecipe, onOpenMove, onOpenAddChoice }) {
+  // これをつくる済みの候補があれば、それ以外の候補は非表示にする(トグルを外すと再表示)
+  const chosenDish = dishes.find((d) => d.chosen === 'true' || d.chosen === true)
+  const visibleDishes = chosenDish ? [chosenDish] : dishes
+
   return (
     <div className="day-card__kind-section">
       <div className="day-card__kind-header">{KIND_LABEL[kind]}</div>
-      {dishes.length > 0 && (
+      {visibleDishes.length > 0 && (
         <div className="day-card__variants">
-          {dishes.map((dish, idx) => (
+          {visibleDishes.map((dish) => (
             <DishCard
               key={dish.dish_id}
               day={day}
               dish={dish}
-              index={idx}
+              index={dishes.indexOf(dish)}
               preferences={preferences}
               onChooseDish={onChooseDish}
               onSetPreference={onSetPreference}
