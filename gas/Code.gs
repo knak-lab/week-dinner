@@ -1002,7 +1002,44 @@ function checkShoppingItem(weekId, groupLabel, ingredientName) {
 //  献立生成（登録済み候補から選ぶ。AIによる新規考案はしない）
 //  事前設定: GASエディタ → プロジェクトの設定 → スクリプトプロパティ
 //            キー: CLAUDE_API_KEY  値: sk-ant-...（候補のスクショ解析に使用）
+//
+//  手持ちの食材（StockIngredients）を考慮:
+//    候補の ingredients_json に、手持ちの食材名と一致・部分一致する材料が
+//    多く含まれる候補ほど優先的に選ばれるよう並び替える（買い足しを減らす）。
+//  曜日を考慮:
+//    週の途中で再生成しても、今日より前（過ぎた）曜日の献立は上書きしない。
 // ─────────────────────────────────────────
+
+function normalizeIngredientName_(name) {
+  return String(name || '').trim().toLowerCase()
+}
+
+function candidateIngredientNames_(candidate) {
+  let ings
+  try { ings = JSON.parse(candidate.ingredients_json || '[]') } catch (ex) { ings = [] }
+  return (ings || []).map(ing => normalizeIngredientName_(ing && ing.name)).filter(Boolean)
+}
+
+// 候補の材料名が、手持ちの食材名のいずれかと一致・部分一致する数を数える
+function stockMatchCount_(candidate, stockNames) {
+  const ingNames = candidateIngredientNames_(candidate)
+  let count = 0
+  ingNames.forEach(n => {
+    if (stockNames.some(s => n.indexOf(s) !== -1 || s.indexOf(n) !== -1)) count++
+  })
+  return count
+}
+
+// 手持ちの食材を多く使う候補ほど先頭に来るよう並び替える（一致数が同じ場合は
+// 元の順序＝shuffle_ 後のランダム順を維持し、毎回違う献立になるようにする）
+function prioritizeByStock_(pool) {
+  const stockNames = getStockIngredients().map(s => normalizeIngredientName_(s.name)).filter(Boolean)
+  if (stockNames.length === 0) return pool
+  return pool
+    .map((c, idx) => ({ c, idx, score: stockMatchCount_(c, stockNames) }))
+    .sort((a, b) => b.score - a.score || a.idx - b.idx)
+    .map(x => x.c)
+}
 
 function generateWeek(weekId) {
   if (!weekId) throw new Error('week_id is required')
@@ -1013,9 +1050,12 @@ function generateWeek(weekId) {
 
   const dishSheet = openOrCreateSheet_(DISH_SHEET, DISH_HDR)
   const ingSheet  = openOrCreateSheet_(ING_SHEET, ING_HDR)
+  const metaSheet = openOrCreateSheet_(WEEK_SHEET, WEEK_HDR)
 
   // 「これをつくる」で確定済みの献立は、日×主菜/副菜ごとに再作成しても変わらないように保持する
-  const existingDishes = sheetToObjs_(dishSheet).filter(d => d.week_id === weekId)
+  // （過ぎた曜日の献立を丸ごと保持する際にも使う）
+  const existingMeta        = sheetToObjs_(metaSheet).filter(r => r.week_id === weekId)
+  const existingDishes      = sheetToObjs_(dishSheet).filter(d => d.week_id === weekId)
   const existingIngredients = sheetToObjs_(ingSheet).filter(ing => ing.week_id === weekId)
   const keptByDayKind = {}
   existingDishes.forEach(d => {
@@ -1032,13 +1072,18 @@ function generateWeek(weekId) {
     if (keptNames[k.dish.kind]) keptNames[k.dish.kind].push(k.dish.name)
   })
 
-  const mainPool = shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'main' && keptNames.main.indexOf(f.main) === -1))
-  const sidePool = shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'side' && keptNames.side.indexOf(f.main) === -1))
+  const mainPool = prioritizeByStock_(shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'main' && keptNames.main.indexOf(f.main) === -1)))
+  const sidePool = prioritizeByStock_(shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'side' && keptNames.side.indexOf(f.main) === -1)))
 
   const days = buildWeekDates_(weekId)
   const cheatIdx = DAY_LABELS.indexOf(cheatDay)
 
-  const metaSheet = openOrCreateSheet_(WEEK_SHEET, WEEK_HDR)
+  // 今日より前（過ぎた）曜日かどうか。過ぎた曜日は再生成対象から外し、既存の献立をそのまま保持する
+  const todayStr = cellToStr(new Date())
+  const isPastDay = i => Boolean(days[i]) && days[i] < todayStr
+  const existingMetaByDay = {}
+  existingMeta.forEach(m => { existingMetaByDay[m.day_label] = m })
+
   clearWeekRows_(metaSheet, WEEK_HDR, weekId)
   clearWeekRows_(dishSheet, DISH_HDR, weekId)
   clearWeekRows_(ingSheet, ING_HDR, weekId)
@@ -1050,13 +1095,15 @@ function generateWeek(weekId) {
 
   DAY_LABELS.forEach((dayLabel, i) => {
     const isCheat = i === cheatIdx
+    const past = isPastDay(i)
+    const prevMeta = existingMetaByDay[dayLabel]
     metaRows.push(WEEK_HDR.map(col => {
       switch (col) {
         case 'week_id':   return weekId
         case 'day_label': return dayLabel
         case 'date':      return days[i]
-        case 'cheat':     return isCheat
-        case 'tags':      return ''
+        case 'cheat':     return past && prevMeta ? prevMeta.cheat === 'true' : isCheat
+        case 'tags':      return past && prevMeta ? prevMeta.tags : ''
         default:          return ''
       }
     }))
@@ -1126,6 +1173,16 @@ function generateWeek(weekId) {
 
   DAY_LABELS.forEach((dayLabel, i) => {
     if (i === cheatIdx) return
+    if (isPastDay(i)) {
+      // 過ぎた曜日は再生成せず、既存の献立・材料をそのまま引き継ぐ
+      existingDishes.filter(d => d.day_label === dayLabel).forEach(d => {
+        dishRows.push(DISH_HDR.map(col => d[col] !== undefined ? d[col] : ''))
+      })
+      existingIngredients.filter(ing => ing.day_label === dayLabel).forEach(ing => {
+        ingRows.push(ING_HDR.map(col => ing[col] !== undefined ? ing[col] : ''))
+      })
+      return
+    }
     fillKind(dayLabel, 'main', nextMain)
     fillKind(dayLabel, 'side', nextSide)
   })
