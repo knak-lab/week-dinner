@@ -537,6 +537,25 @@ function removeCandidate(favId) {
   return { favorites: getFavorites() }
 }
 
+function stripEmojiAndSpecialChars_(str) {
+  if (!str) return str
+  return str
+    .replace(/\p{Extended_Pictographic}/gu, '')
+    .replace(/[\u{FE0F}\u{200D}\u{20E3}]/gu, '')
+    .replace(/[\u{1F1E6}-\u{1F1FF}]/gu, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
+}
+
+function extractTextFromClaudeResponse_(result) {
+  const block = result && result.content && result.content[0]
+  const text = block && block.text
+  if (!text) {
+    throw new Error('AIからの応答を解析できませんでした。画像やテキストに含まれる絵文字・特殊文字が原因の場合があります。内容を確認のうえ、もう一度お試しください。')
+  }
+  return text
+}
+
 function extractDishFromImage(images) {
   if (!images || images.length === 0) return { error: 'images is required' }
   const apiKey = PropertiesService.getScriptProperties().getProperty('CLAUDE_API_KEY')
@@ -587,7 +606,7 @@ function extractDishFromImage(images) {
     throw new Error('Claude API エラー(' + code + '): ' + (result.error && result.error.message ? result.error.message : body))
   }
 
-  const text = result.content[0].text
+  const text = extractTextFromClaudeResponse_(result)
   const jsonText = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
   const extracted = JSON.parse(jsonText)
 
@@ -604,9 +623,12 @@ function extractDishFromImage(images) {
   }
 
   return {
-    main: extracted.main || '',
-    recipe: extracted.recipe || '',
-    ingredients: extracted.ingredients || [],
+    main: stripEmojiAndSpecialChars_(extracted.main || ''),
+    recipe: stripEmojiAndSpecialChars_(extracted.recipe || ''),
+    ingredients: (extracted.ingredients || []).map((ing) => ({
+      name: stripEmojiAndSpecialChars_(ing.name || ''),
+      amount: stripEmojiAndSpecialChars_(ing.amount || ''),
+    })),
     imageUrl,
   }
 }
@@ -618,9 +640,12 @@ function extractDishFromText(text) {
     throw new Error('GASのスクリプトプロパティに CLAUDE_API_KEY を設定してください（プロジェクトの設定 → スクリプトプロパティ）')
   }
 
+  const cleanText = stripEmojiAndSpecialChars_(text)
+  if (!cleanText) return { error: 'text is required' }
+
   const prompt = [
     '以下はSNS（Instagramなど）の料理レシピ投稿のキャプション文です。',
-    'ハッシュタグや宣伝文句・絵文字は無視し、実際のレシピ情報（主菜・副菜のどちらか1品）のみを抽出して、',
+    'ハッシュタグや宣伝文句は無視し、実際のレシピ情報（主菜・副菜のどちらか1品）のみを抽出して、',
     '以下のJSON形式のみを出力してください（説明文は一切不要）。',
     '読み取れない項目は空文字または空配列にしてください。レシピ情報が全く含まれない場合はmainを空文字にしてください。',
     '',
@@ -631,7 +656,7 @@ function extractDishFromText(text) {
     '}',
     '',
     '--- キャプション文 ---',
-    text,
+    cleanText,
   ].join('\n')
 
   const response = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
@@ -656,14 +681,17 @@ function extractDishFromText(text) {
     throw new Error('Claude API エラー(' + code + '): ' + (result.error && result.error.message ? result.error.message : body))
   }
 
-  const responseText = result.content[0].text
+  const responseText = extractTextFromClaudeResponse_(result)
   const jsonText = responseText.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
   const extracted = JSON.parse(jsonText)
 
   return {
-    main: extracted.main || '',
-    recipe: extracted.recipe || '',
-    ingredients: extracted.ingredients || [],
+    main: stripEmojiAndSpecialChars_(extracted.main || ''),
+    recipe: stripEmojiAndSpecialChars_(extracted.recipe || ''),
+    ingredients: (extracted.ingredients || []).map((ing) => ({
+      name: stripEmojiAndSpecialChars_(ing.name || ''),
+      amount: stripEmojiAndSpecialChars_(ing.amount || ''),
+    })),
     imageUrl: '',
   }
 }
