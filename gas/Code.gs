@@ -69,7 +69,7 @@ function doPost(e) {
       case 'updateStockIngredientQuantity':  return ok(updateStockIngredientQuantity(body.id, body.quantity))
       case 'removeStockIngredient':          return ok(removeStockIngredient(body.id))
       case 'checkShoppingItem':              return ok(checkShoppingItem(body.week_id, body.group_label, body.ingredient_name))
-      case 'extractDishFromImage':           return ok(extractDishFromImage(body.image_base64, body.mime_type))
+      case 'extractDishFromImage':           return ok(extractDishFromImage(body.images))
       case 'extractDishFromText':            return ok(extractDishFromText(body.text))
       case 'addCandidate':                   return ok(addCandidate(body.main, body.recipe, body.ingredients, body.image_url, body.category))
       case 'updateCandidate':                return ok(updateCandidate(body.fav_id, body.main, body.recipe, body.ingredients, body.category, body.image_url))
@@ -532,15 +532,17 @@ function removeCandidate(favId) {
   return { favorites: getFavorites() }
 }
 
-function extractDishFromImage(imageBase64, mimeType) {
-  if (!imageBase64) return { error: 'image_base64 is required' }
+function extractDishFromImage(images) {
+  if (!images || images.length === 0) return { error: 'images is required' }
   const apiKey = PropertiesService.getScriptProperties().getProperty('CLAUDE_API_KEY')
   if (!apiKey) {
     throw new Error('GASのスクリプトプロパティに CLAUDE_API_KEY を設定してください（プロジェクトの設定 → スクリプトプロパティ）')
   }
 
   const prompt = [
-    'この画像は料理のレシピ・献立のスクリーンショットです。',
+    images.length > 1
+      ? 'これらの画像は同じ料理レシピ・献立を撮影した複数枚のスクリーンショットです（1枚に収まらないため分割撮影）。全体を1つのレシピとしてまとめて読み取ってください。'
+      : 'この画像は料理のレシピ・献立のスクリーンショットです。',
     '写っている料理（主菜・副菜のどちらか1品）について、以下のJSON形式のみを出力してください（説明文は一切不要）。',
     '複数の料理が写っている場合は、中心となる1品のみを対象にしてください。',
     '読み取れない項目は空文字または空配列にしてください。料理が全く写っていない場合はmainを空文字にしてください。',
@@ -552,6 +554,12 @@ function extractDishFromImage(imageBase64, mimeType) {
     '}',
   ].join('\n')
 
+  const content = images.map((img) => ({
+    type: 'image',
+    source: { type: 'base64', media_type: img.mime_type, data: img.base64 },
+  }))
+  content.push({ type: 'text', text: prompt })
+
   const response = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
     method: 'post',
     headers: {
@@ -562,13 +570,7 @@ function extractDishFromImage(imageBase64, mimeType) {
     payload: JSON.stringify({
       model: 'claude-sonnet-5',
       max_tokens: 2000,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } },
-          { type: 'text', text: prompt },
-        ],
-      }],
+      messages: [{ role: 'user', content }],
     }),
     muteHttpExceptions: true,
   })
@@ -586,8 +588,9 @@ function extractDishFromImage(imageBase64, mimeType) {
 
   let imageUrl = ''
   try {
-    const bytes = Utilities.base64Decode(imageBase64)
-    const blob = Utilities.newBlob(bytes, mimeType, 'recipe-' + Utilities.getUuid() + '.jpg')
+    const first = images[0]
+    const bytes = Utilities.base64Decode(first.base64)
+    const blob = Utilities.newBlob(bytes, first.mime_type, 'recipe-' + Utilities.getUuid() + '.jpg')
     const file = DriveApp.createFile(blob)
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
     imageUrl = 'https://drive.google.com/uc?id=' + file.getId()

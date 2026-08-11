@@ -132,7 +132,7 @@ function CandidateListSection({ title, items, onEdit, onRemove }) {
 
 export default function CandidatesView({ favorites, onExtract, onExtractText, onAddCandidate, onUpdateCandidate, onRemoveCandidate }) {
   const [inputMode, setInputMode] = useState('image')
-  const [preview, setPreview] = useState(null)
+  const [previews, setPreviews] = useState([])
   const [pastedText, setPastedText] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [extracted, setExtracted] = useState(null)
@@ -142,25 +142,29 @@ export default function CandidatesView({ favorites, onExtract, onExtractText, on
   const fileInputRef = useRef(null)
 
   const handleFileChange = async (e) => {
-    const file = e.target.files && e.target.files[0]
-    if (!file) return
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
     setUploadError('')
     setExtracted(null)
     setEditing(null)
     try {
-      const resized = await resizeImageToBase64_(file)
-      setPreview(resized)
+      const resized = await Promise.all(files.map(resizeImageToBase64_))
+      setPreviews((prev) => [...prev, ...resized])
     } catch (err) {
       setUploadError(err.message)
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
+  const removePreview = (idx) => setPreviews((prev) => prev.filter((_, i) => i !== idx))
+
   const handleExtract = async () => {
-    if (!preview) return
+    if (previews.length === 0) return
     setExtracting(true)
     setUploadError('')
     try {
-      const res = await onExtract(preview.base64, 'image/jpeg')
+      const res = await onExtract(previews.map((p) => ({ base64: p.base64, mimeType: 'image/jpeg' })))
       setExtracted(res)
     } catch (err) {
       setUploadError(err.message)
@@ -184,7 +188,7 @@ export default function CandidatesView({ favorites, onExtract, onExtractText, on
   }
 
   const resetUpload = () => {
-    setPreview(null)
+    setPreviews([])
     setPastedText('')
     setExtracted(null)
     setUploadError('')
@@ -232,14 +236,24 @@ export default function CandidatesView({ favorites, onExtract, onExtractText, on
 
         {!editing && !extracted && inputMode === 'image' && (
           <div className="upload-form">
-            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} />
-            {preview && <img src={preview.dataUrl} alt="" className="upload-form__preview" />}
+            <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileChange} />
+            <p className="upload-form__hint">1枚のスクショで収まらない場合は複数枚選択できます</p>
+            {previews.length > 0 && (
+              <div className="upload-form__preview-list">
+                {previews.map((p, idx) => (
+                  <div className="upload-form__preview-item" key={idx}>
+                    <img src={p.dataUrl} alt="" className="upload-form__preview" />
+                    <button type="button" className="upload-form__preview-remove" onClick={() => removePreview(idx)} aria-label="削除">×</button>
+                  </div>
+                ))}
+              </div>
+            )}
             {uploadError && <p className="error-msg">{uploadError}</p>}
             <button
               type="button"
               className="upload-form__extract-btn"
               onClick={handleExtract}
-              disabled={!preview || extracting}
+              disabled={previews.length === 0 || extracting}
             >
               {extracting ? '解析中…' : '解析する'}
             </button>

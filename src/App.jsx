@@ -230,9 +230,9 @@ export default function App() {
     }
   }
 
-  const handleExtractDishFromImage = async (imageBase64, mimeType) => {
+  const handleExtractDishFromImage = async (images) => {
     try {
-      return await gasApi.extractDishFromImage(imageBase64, mimeType)
+      return await gasApi.extractDishFromImage(images)
     } catch (e) {
       setError(e.message)
       throw e
