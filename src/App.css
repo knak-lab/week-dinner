@@ -842,6 +842,21 @@ body {
   flex-shrink: 0;
 }
 
+.variant__dish-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.variant__dish-label {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  color: var(--text-sub);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
 .variant__main {
   font-weight: bold;
   font-size: 0.95rem;
@@ -850,6 +865,12 @@ body {
 .variant__side {
   color: var(--text-sub);
   font-size: 0.85rem;
+}
+
+.recipe-modal__main-line {
+  font-weight: bold;
+  font-size: 1rem;
+  margin: 4px 0 0;
 }
 
 .variant__pref {

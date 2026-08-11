@@ -2,13 +2,16 @@ import { useState } from 'react'
 
 const DAY_LABELS = ['月', '火', '水', '木', '金', '土', '日']
 
+const dayLabelFull_ = (label) => `${label}曜`
+
 function RecipeModal({ dayLabel, main, side, recipe, ingredients, onClose }) {
   return (
     <div className="recipe-modal-backdrop" onClick={onClose}>
       <div className="recipe-modal" onClick={(e) => e.stopPropagation()}>
         <div className="recipe-modal__header">
           <div>
-            <h3 className="recipe-modal__title">{dayLabel}：{main}</h3>
+            <h3 className="recipe-modal__title">{dayLabelFull_(dayLabel)}</h3>
+            <p className="recipe-modal__main-line">主菜：{main}</p>
             {side && <p className="recipe-modal__side">副菜：{side}</p>}
           </div>
           <button className="recipe-modal__close" onClick={onClose} aria-label="閉じる">×</button>
@@ -40,7 +43,7 @@ function AddChoiceModal({ dayLabel, hasFavorites, onSelectManual, onSelectFavori
     <div className="recipe-modal-backdrop" onClick={onClose}>
       <div className="recipe-modal recipe-modal--narrow" onClick={(e) => e.stopPropagation()}>
         <div className="recipe-modal__header">
-          <h3 className="recipe-modal__title">{dayLabel}に献立を追加</h3>
+          <h3 className="recipe-modal__title">{dayLabelFull_(dayLabel)}に献立を追加</h3>
           <button className="recipe-modal__close" onClick={onClose} aria-label="閉じる">×</button>
         </div>
         <div className="choice-list">
@@ -79,7 +82,7 @@ function ManualDishModal({ dayLabel, onSave, onClose }) {
     <div className="recipe-modal-backdrop" onClick={onClose}>
       <div className="recipe-modal" onClick={(e) => e.stopPropagation()}>
         <div className="recipe-modal__header">
-          <h3 className="recipe-modal__title">{dayLabel}に手動で献立を登録</h3>
+          <h3 className="recipe-modal__title">{dayLabelFull_(dayLabel)}に手動で献立を登録</h3>
           <button className="recipe-modal__close" onClick={onClose} aria-label="閉じる">×</button>
         </div>
 
@@ -136,7 +139,7 @@ function FavoritePickerModal({ dayLabel, favorites, onSelect, onClose }) {
     <div className="recipe-modal-backdrop" onClick={onClose}>
       <div className="recipe-modal recipe-modal--narrow" onClick={(e) => e.stopPropagation()}>
         <div className="recipe-modal__header">
-          <h3 className="recipe-modal__title">{dayLabel}にお気に入りから追加</h3>
+          <h3 className="recipe-modal__title">{dayLabelFull_(dayLabel)}にお気に入りから追加</h3>
           <button className="recipe-modal__close" onClick={onClose} aria-label="閉じる">×</button>
         </div>
         {favorites.length === 0 ? (
@@ -197,7 +200,7 @@ function MoveDishModal({ currentDayLabel, onSelectDay, onClose }) {
               onClick={() => onSelectDay(d)}
               disabled={d === currentDayLabel}
             >
-              {d}
+              {dayLabelFull_(d)}
             </button>
           ))}
         </div>
@@ -236,8 +239,16 @@ function DishCard({ day, dish, index, preferences, onChooseDish, onSetPreference
           </button>
         </div>
       </div>
-      <div className="variant__main">{dish.main}</div>
-      <div className="variant__side">{dish.side}</div>
+      <div className="variant__dish-row">
+        <span className="variant__dish-label">主菜</span>
+        <span className="variant__main">{dish.main}</span>
+      </div>
+      {dish.side && (
+        <div className="variant__dish-row">
+          <span className="variant__dish-label">副菜</span>
+          <span className="variant__side">{dish.side}</span>
+        </div>
+      )}
       {isChosen && (
         <div className="variant__pref">
           <button
@@ -266,7 +277,7 @@ function DayCard({ day, preferences, onChooseDish, onSetPreference, onShowRecipe
   return (
     <div className={`day-card${isCheat ? ' day-card--cheat' : ''}`}>
       <div className="day-card__header">
-        <span className="day-card__label">{day.day_label}</span>
+        <span className="day-card__label">{dayLabelFull_(day.day_label)}</span>
         <span className="day-card__date">{day.date}</span>
         {tags.length > 0 && (
           <span className="day-card__tags">
