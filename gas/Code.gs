@@ -71,8 +71,8 @@ function doPost(e) {
       case 'checkShoppingItem':              return ok(checkShoppingItem(body.week_id, body.group_label, body.ingredient_name))
       case 'extractDishFromImage':           return ok(extractDishFromImage(body.images))
       case 'extractDishFromText':            return ok(extractDishFromText(body.text))
-      case 'addCandidate':                   return ok(addCandidate(body.main, body.recipe, body.ingredients, body.image_url, body.category))
-      case 'updateCandidate':                return ok(updateCandidate(body.fav_id, body.main, body.recipe, body.ingredients, body.category, body.image_url))
+      case 'addCandidate':                   return ok(addCandidate(body.main, body.recipe, body.ingredients, body.category, body.image_base64, body.image_mime_type))
+      case 'updateCandidate':                return ok(updateCandidate(body.fav_id, body.main, body.recipe, body.ingredients, body.category, body.image_base64, body.image_mime_type, body.remove_image))
       case 'removeCandidate':                return ok(removeCandidate(body.fav_id))
       default:                 return err('Unknown action: ' + body.action)
     }
@@ -488,18 +488,18 @@ function normalizeCandidateCategory_(category) {
   return CANDIDATE_CATEGORIES.indexOf(category) === -1 ? 'main' : category
 }
 
-function addCandidate(main, recipe, ingredients, imageUrl, category) {
+function addCandidate(main, recipe, ingredients, category, imageBase64, imageMimeType) {
   if (!main) return { error: 'main is required' }
   const sheet = openOrCreateSheet_(FAV_SHEET, FAV_HDR)
   appendRow_(sheet, FAV_HDR, {
     fav_id: Utilities.getUuid(), main, side: '', recipe: recipe || '',
     ingredients_json: JSON.stringify(ingredients || []), created_at: nowStr_(),
-    image_url: imageUrl || '', category: normalizeCandidateCategory_(category),
+    image_url: uploadImageToDrive_(imageBase64, imageMimeType), category: normalizeCandidateCategory_(category),
   })
   return { favorites: getFavorites() }
 }
 
-function updateCandidate(favId, main, recipe, ingredients, category, imageUrl) {
+function updateCandidate(favId, main, recipe, ingredients, category, imageBase64, imageMimeType, removeImage) {
   if (!favId) return { error: 'fav_id is required' }
   if (!main) return { error: 'main is required' }
   const sheet = openOrCreateSheet_(FAV_SHEET, FAV_HDR)
@@ -516,7 +516,11 @@ function updateCandidate(favId, main, recipe, ingredients, category, imageUrl) {
       sheet.getRange(i + 1, recipeIdx + 1).setValue(recipe || '')
       sheet.getRange(i + 1, ingIdx + 1).setValue(JSON.stringify(ingredients || []))
       sheet.getRange(i + 1, catIdx + 1).setValue(normalizeCandidateCategory_(category))
-      if (imageUrl) sheet.getRange(i + 1, imgIdx + 1).setValue(imageUrl)
+      if (imageBase64) {
+        sheet.getRange(i + 1, imgIdx + 1).setValue(uploadImageToDrive_(imageBase64, imageMimeType))
+      } else if (removeImage) {
+        sheet.getRange(i + 1, imgIdx + 1).setValue('')
+      }
       break
     }
   }
@@ -545,6 +549,19 @@ function stripEmojiAndSpecialChars_(str) {
     .replace(/[\u{1F1E6}-\u{1F1FF}]/gu, '')
     .replace(/[ \t]{2,}/g, ' ')
     .trim()
+}
+
+function uploadImageToDrive_(base64, mimeType) {
+  if (!base64) return ''
+  try {
+    const bytes = Utilities.base64Decode(base64)
+    const blob = Utilities.newBlob(bytes, mimeType || 'image/jpeg', 'thumbnail-' + Utilities.getUuid() + '.jpg')
+    const file = DriveApp.createFile(blob)
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
+    return 'https://drive.google.com/uc?id=' + file.getId()
+  } catch (ex) {
+    return ''
+  }
 }
 
 function extractTextFromClaudeResponse_(result) {
@@ -610,18 +627,6 @@ function extractDishFromImage(images) {
   const jsonText = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
   const extracted = JSON.parse(jsonText)
 
-  let imageUrl = ''
-  try {
-    const first = images[0]
-    const bytes = Utilities.base64Decode(first.base64)
-    const blob = Utilities.newBlob(bytes, first.mime_type, 'recipe-' + Utilities.getUuid() + '.jpg')
-    const file = DriveApp.createFile(blob)
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
-    imageUrl = 'https://drive.google.com/uc?id=' + file.getId()
-  } catch (ex) {
-    imageUrl = ''
-  }
-
   return {
     main: stripEmojiAndSpecialChars_(extracted.main || ''),
     recipe: stripEmojiAndSpecialChars_(extracted.recipe || ''),
@@ -629,7 +634,7 @@ function extractDishFromImage(images) {
       name: stripEmojiAndSpecialChars_(ing.name || ''),
       amount: stripEmojiAndSpecialChars_(ing.amount || ''),
     })),
-    imageUrl,
+    imageUrl: '',
   }
 }
 

@@ -94,9 +94,18 @@ export const gasApi = {
   extractDishFromImage: (images) =>
     post({ action: 'extractDishFromImage', images: images.map((img) => ({ base64: img.base64, mime_type: img.mimeType })) }),
   extractDishFromText: (text) => post({ action: 'extractDishFromText', text }),
-  addCandidate: (main, recipe, ingredients, imageUrl, category) =>
-    post({ action: 'addCandidate', main, recipe, ingredients, image_url: imageUrl, category }),
-  updateCandidate: (favId, main, recipe, ingredients, category, imageUrl) =>
-    post({ action: 'updateCandidate', fav_id: favId, main, recipe, ingredients, category, image_url: imageUrl }),
+  addCandidate: (main, recipe, ingredients, category, thumbnail) =>
+    post({
+      action: 'addCandidate', main, recipe, ingredients, category,
+      image_base64: thumbnail ? thumbnail.base64 : '',
+      image_mime_type: thumbnail ? thumbnail.mimeType : '',
+    }),
+  updateCandidate: (favId, main, recipe, ingredients, category, thumbnail, removeImage) =>
+    post({
+      action: 'updateCandidate', fav_id: favId, main, recipe, ingredients, category,
+      image_base64: thumbnail ? thumbnail.base64 : '',
+      image_mime_type: thumbnail ? thumbnail.mimeType : '',
+      remove_image: Boolean(removeImage),
+    }),
   removeCandidate: (favId) => post({ action: 'removeCandidate', fav_id: favId }),
 }

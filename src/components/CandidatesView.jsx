@@ -56,12 +56,35 @@ function CandidateForm({ mode, initialValues, onSave, onCancel }) {
       ? initialValues.ingredients.map((ing) => ({ name: ing.name || '', amount: ing.amount || '' }))
       : [{ name: '', amount: '' }]
   )
+  const [thumbnailPreview, setThumbnailPreview] = useState(initialValues.image_url || initialValues.imageUrl || '')
+  const [thumbnailFile, setThumbnailFile] = useState(null)
+  const [thumbnailRemoved, setThumbnailRemoved] = useState(false)
   const [saving, setSaving] = useState(false)
+  const thumbnailInputRef = useRef(null)
 
   const updateIngredient = (idx, field, value) =>
     setIngredientRows((prev) => prev.map((ing, i) => (i === idx ? { ...ing, [field]: value } : ing)))
   const addIngredientRow = () => setIngredientRows((prev) => [...prev, { name: '', amount: '' }])
   const removeIngredientRow = (idx) => setIngredientRows((prev) => prev.filter((_, i) => i !== idx))
+
+  const handleThumbnailChange = async (e) => {
+    const file = e.target.files && e.target.files[0]
+    if (!file) return
+    try {
+      const { dataUrl, base64 } = await resizeImageToBase64_(file)
+      setThumbnailPreview(dataUrl)
+      setThumbnailFile({ base64, mimeType: 'image/jpeg' })
+      setThumbnailRemoved(false)
+    } finally {
+      if (thumbnailInputRef.current) thumbnailInputRef.current.value = ''
+    }
+  }
+
+  const removeThumbnail = () => {
+    setThumbnailPreview('')
+    setThumbnailFile(null)
+    setThumbnailRemoved(true)
+  }
 
   const submit = async (e) => {
     e.preventDefault()
@@ -71,7 +94,10 @@ function CandidateForm({ mode, initialValues, onSave, onCancel }) {
       .map((ing) => ({ name: ing.name.trim(), amount: ing.amount.trim() }))
     setSaving(true)
     try {
-      await onSave({ main: main.trim(), recipe: recipe.trim(), ingredients: cleanIngredients, category })
+      await onSave({
+        main: main.trim(), recipe: recipe.trim(), ingredients: cleanIngredients, category,
+        thumbnail: thumbnailFile, removeImage: thumbnailRemoved,
+      })
     } finally {
       setSaving(false)
     }
@@ -79,7 +105,16 @@ function CandidateForm({ mode, initialValues, onSave, onCancel }) {
 
   return (
     <form className="candidate-review-form" onSubmit={submit}>
-      {initialValues.imageUrl && <img src={initialValues.imageUrl} alt="" className="upload-form__preview" />}
+      <label className="manual-form__label">サムネイル画像</label>
+      <div className="manual-form__thumbnail">
+        {thumbnailPreview && <img src={thumbnailPreview} alt="" className="upload-form__preview" />}
+        <div className="manual-form__thumbnail-actions">
+          <input ref={thumbnailInputRef} type="file" accept="image/*" onChange={handleThumbnailChange} />
+          {thumbnailPreview && (
+            <button type="button" className="manual-form__remove-ing" onClick={removeThumbnail}>削除</button>
+          )}
+        </div>
+      </div>
 
       <label className="manual-form__label">区分</label>
       <select value={category} onChange={(e) => setCategory(e.target.value)}>
@@ -214,13 +249,13 @@ export default function CandidatesView({ favorites, onExtract, onExtractText, on
     setEditing({ ...f, ingredients: parseIngredientsJson_(f.ingredients_json) })
   }
 
-  const handleSaveNew = async ({ main, recipe, ingredients, category }) => {
-    await onAddCandidate(main, recipe, ingredients, extracted ? extracted.imageUrl : '', category)
+  const handleSaveNew = async ({ main, recipe, ingredients, category, thumbnail }) => {
+    await onAddCandidate(main, recipe, ingredients, category, thumbnail)
     resetUpload()
   }
 
-  const handleSaveEdit = async ({ main, recipe, ingredients, category }) => {
-    await onUpdateCandidate(editing.fav_id, main, recipe, ingredients, category, editing.image_url || '')
+  const handleSaveEdit = async ({ main, recipe, ingredients, category, thumbnail, removeImage }) => {
+    await onUpdateCandidate(editing.fav_id, main, recipe, ingredients, category, thumbnail, removeImage)
     setEditing(null)
   }
 

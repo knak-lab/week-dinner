@@ -584,6 +584,19 @@ body {
   cursor: pointer;
 }
 
+.manual-form__thumbnail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.manual-form__thumbnail-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .manual-form__submit {
   margin-top: 10px;
   border: none;

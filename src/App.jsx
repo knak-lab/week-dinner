@@ -248,9 +248,9 @@ export default function App() {
     }
   }
 
-  const handleAddCandidate = async (main, recipe, ingredients, imageUrl, category) => {
+  const handleAddCandidate = async (main, recipe, ingredients, category, thumbnail) => {
     try {
-      const res = await gasApi.addCandidate(main, recipe, ingredients, imageUrl, category)
+      const res = await gasApi.addCandidate(main, recipe, ingredients, category, thumbnail)
       setWeekData((prev) => ({ ...prev, favorites: res.favorites }))
     } catch (e) {
       setError(e.message)
@@ -258,9 +258,9 @@ export default function App() {
     }
   }
 
-  const handleUpdateCandidate = async (favId, main, recipe, ingredients, category, imageUrl) => {
+  const handleUpdateCandidate = async (favId, main, recipe, ingredients, category, thumbnail, removeImage) => {
     try {
-      const res = await gasApi.updateCandidate(favId, main, recipe, ingredients, category, imageUrl)
+      const res = await gasApi.updateCandidate(favId, main, recipe, ingredients, category, thumbnail, removeImage)
       setWeekData((prev) => ({ ...prev, favorites: res.favorites }))
     } catch (e) {
       setError(e.message)
