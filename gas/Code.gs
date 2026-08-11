@@ -40,6 +40,7 @@ function doGet(e) {
   const action = e.parameter.action || ''
   try {
     ensureDishSchemaMigrated_()
+    ensureDriveUrlsMigrated_()
     switch (action) {
       case 'getWeek':              return ok(getWeek(e.parameter.week_id || ''))
       case 'getShoppingList':      return ok(getShoppingList(e.parameter.week_id || ''))
@@ -57,6 +58,7 @@ function doPost(e) {
     const body = JSON.parse(raw)
     if (!isAuthorized(body.token)) return err('Unauthorized')
     ensureDishSchemaMigrated_()
+    ensureDriveUrlsMigrated_()
     switch (body.action) {
       case 'generateWeek':     return ok(generateWeek(body.week_id))
       case 'setPreference':    return ok(setPreference(body.dish_name, body.preference, body.week_id, body.day_label, body.dish_id, body.kind, body.recipe, body.ingredients))
@@ -212,6 +214,37 @@ function ensureDishSchemaMigrated_() {
   if (newRows.length > 0) {
     sheet.getRange(2, 1, newRows.length, DISH_HDR.length).setValues(newRows)
   }
+}
+
+// ─────────────────────────────────────────
+//  旧形式のDrive画像URL（drive.google.com/uc?id=...）を、ブラウザの<img>埋め込みで
+//  CORPブロックされない thumbnailエンドポイント形式に一括修正する（冪等）。
+// ─────────────────────────────────────────
+function ensureDriveUrlsMigrated_() {
+  const fixSheet = (sheetName) => {
+    const sheet = getSpreadsheet_().getSheetByName(sheetName)
+    if (!sheet) return
+    const lastCol = sheet.getLastColumn()
+    if (lastCol === 0) return
+    const hdrRow = sheet.getRange(1, 1, 1, lastCol).getValues()[0]
+    const colIdx = hdrRow.indexOf('image_url')
+    if (colIdx === -1) return
+    const lastRow = sheet.getLastRow()
+    if (lastRow < 2) return
+    const range = sheet.getRange(2, colIdx + 1, lastRow - 1, 1)
+    const values = range.getValues()
+    let changed = false
+    const updated = values.map(row => {
+      const val = String(row[0] || '')
+      const m = val.match(/drive\.google\.com\/uc\?id=([^&]+)/)
+      if (!m) return [val]
+      changed = true
+      return [driveThumbnailUrl_(m[1])]
+    })
+    if (changed) range.setValues(updated)
+  }
+  fixSheet(FAV_SHEET)
+  fixSheet(DISH_SHEET)
 }
 
 // ─────────────────────────────────────────
@@ -609,6 +642,12 @@ function stripEmojiAndSpecialChars_(str) {
     .trim()
 }
 
+function driveThumbnailUrl_(fileId) {
+  // drive.google.com/uc?id=... はブラウザでの<img>埋め込み時にCORP(Cross-Origin-Resource-Policy)で
+  // ブロックされ画像が表示されないため、埋め込み用に設計されたthumbnailエンドポイントを使う。
+  return 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w1000'
+}
+
 function uploadImageToDrive_(base64, mimeType) {
   if (!base64) return ''
   try {
@@ -616,7 +655,7 @@ function uploadImageToDrive_(base64, mimeType) {
     const blob = Utilities.newBlob(bytes, mimeType || 'image/jpeg', 'thumbnail-' + Utilities.getUuid() + '.jpg')
     const file = DriveApp.createFile(blob)
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
-    return 'https://drive.google.com/uc?id=' + file.getId()
+    return driveThumbnailUrl_(file.getId())
   } catch (ex) {
     return ''
   }
