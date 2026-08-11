@@ -519,9 +519,18 @@ body {
   padding: 8px 10px;
 }
 
+.favorite-list__thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
 .favorite-list__main {
   font-weight: bold;
   font-size: 0.9rem;
+  flex: 1;
 }
 
 .favorite-list__side {
@@ -617,6 +626,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .manual-form__submit {
@@ -873,6 +883,20 @@ body {
   flex-shrink: 0;
 }
 
+.variant__body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.variant__thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
 .variant__main {
   font-weight: bold;
   font-size: 0.95rem;
@@ -882,6 +906,14 @@ body {
   font-weight: bold;
   font-size: 1rem;
   margin: 4px 0 0;
+}
+
+.recipe-modal__thumb {
+  width: 100%;
+  max-height: 200px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin: 10px 0;
 }
 
 .variant__pref {

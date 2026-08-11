@@ -7,7 +7,7 @@ const SPREADSHEET_ID = '1msjKZ1gpog3igLrI5LLHsTKzp4bNAjRNPmGX5XdnZHQ'
 const WEEK_SHEET  = 'WeekPlan'
 const WEEK_HDR    = ['week_id', 'day_label', 'date', 'cheat', 'tags']
 const DISH_SHEET  = 'WeekDishes'
-const DISH_HDR    = ['week_id', 'day_label', 'dish_id', 'order', 'kind', 'name', 'recipe', 'chosen']
+const DISH_HDR    = ['week_id', 'day_label', 'dish_id', 'order', 'kind', 'name', 'recipe', 'chosen', 'image_url']
 const ING_SHEET    = 'Ingredients'
 const ING_HDR      = ['week_id', 'day_label', 'dish_id', 'ingredient_name', 'amount']
 const TAG_SHEET    = 'StyleTags'
@@ -64,7 +64,7 @@ function doPost(e) {
       case 'removeTag':        return ok(removeTag(body.tag_id))
       case 'setCheatDay':      return ok(setCheatDay(body.cheat_day))
       case 'setChosenDish':    return ok(setChosenDish(body.dish_id))
-      case 'addDish':              return ok(addDish(body.week_id, body.day_label, body.kind, body.name, body.recipe, body.ingredients))
+      case 'addDish':              return ok(addDish(body.week_id, body.day_label, body.kind, body.name, body.recipe, body.ingredients, body.image_url))
       case 'addDishFromFavorite':  return ok(addDishFromFavorite(body.week_id, body.day_label, body.fav_id, body.kind))
       case 'moveDish':              return ok(moveDish(body.dish_id, body.target_day_label))
       case 'addStockIngredient':             return ok(addStockIngredient(body.name, body.quantity))
@@ -198,8 +198,8 @@ function ensureDishSchemaMigrated_() {
   const newRows = []
   oldRows.forEach(r => {
     const parts = splitRecipe_(r.recipe)
-    if (r.main) newRows.push([r.week_id, r.day_label, r.dish_id, r.order, 'main', r.main, parts.main, r.chosen])
-    if (r.side) newRows.push([r.week_id, r.day_label, Utilities.getUuid(), r.order, 'side', r.side, parts.side, r.chosen])
+    if (r.main) newRows.push([r.week_id, r.day_label, r.dish_id, r.order, 'main', r.main, parts.main, r.chosen, r.image_url || ''])
+    if (r.side) newRows.push([r.week_id, r.day_label, Utilities.getUuid(), r.order, 'side', r.side, parts.side, r.chosen, ''])
   })
 
   sheet.clear()
@@ -312,7 +312,7 @@ function saveDishIngredients_(weekId, dayLabel, dishId, ingredients) {
   })
 }
 
-function addDish(weekId, dayLabel, kind, name, recipe, ingredients) {
+function addDish(weekId, dayLabel, kind, name, recipe, ingredients, imageUrl) {
   if (!weekId || !dayLabel) return { error: 'week_id and day_label are required' }
   if (!name) return { error: 'name is required' }
   const normKind = kind === 'side' ? 'side' : 'main'
@@ -325,7 +325,7 @@ function addDish(weekId, dayLabel, kind, name, recipe, ingredients) {
   const order  = nextDishOrder_(dishSheet, weekId, dayLabel, normKind)
   appendRow_(dishSheet, DISH_HDR, {
     week_id: weekId, day_label: dayLabel, dish_id: dishId, order,
-    kind: normKind, name, recipe: recipe || '', chosen: '',
+    kind: normKind, name, recipe: recipe || '', chosen: '', image_url: imageUrl || '',
   })
   saveDishIngredients_(weekId, dayLabel, dishId, ingredients)
 
@@ -338,7 +338,7 @@ function addDishFromFavorite(weekId, dayLabel, favId, kind) {
   if (!fav) return { error: 'favorite not found' }
   let ingredients = []
   try { ingredients = JSON.parse(fav.ingredients_json || '[]') } catch (ex) { ingredients = [] }
-  return addDish(weekId, dayLabel, kind, fav.main, fav.recipe, ingredients)
+  return addDish(weekId, dayLabel, kind, fav.main, fav.recipe, ingredients, fav.image_url)
 }
 
 function moveDish(dishId, targetDayLabel) {
@@ -1047,6 +1047,7 @@ function generateWeek(weekId) {
           case 'name':      return kept.dish.name
           case 'recipe':    return kept.dish.recipe
           case 'chosen':    return 'true'
+          case 'image_url': return kept.dish.image_url || ''
           default:          return ''
         }
       }))
@@ -1071,6 +1072,7 @@ function generateWeek(weekId) {
           case 'name':      return c.main
           case 'recipe':    return c.recipe || ''
           case 'chosen':    return ''
+          case 'image_url': return c.image_url || ''
           default:          return ''
         }
       }))

@@ -64,6 +64,7 @@ function CandidateForm({ mode, initialValues, onSave, onCancel }) {
   const [thumbnailRemoved, setThumbnailRemoved] = useState(false)
   const [saving, setSaving] = useState(false)
   const thumbnailInputRef = useRef(null)
+  const thumbnailCameraInputRef = useRef(null)
 
   const updateIngredient = (idx, field, value) =>
     setIngredientRows((prev) => prev.map((ing, i) => (i === idx ? { ...ing, [field]: value } : ing)))
@@ -80,6 +81,7 @@ function CandidateForm({ mode, initialValues, onSave, onCancel }) {
       setThumbnailRemoved(false)
     } finally {
       if (thumbnailInputRef.current) thumbnailInputRef.current.value = ''
+      if (thumbnailCameraInputRef.current) thumbnailCameraInputRef.current.value = ''
     }
   }
 
@@ -112,7 +114,14 @@ function CandidateForm({ mode, initialValues, onSave, onCancel }) {
       <div className="manual-form__thumbnail">
         {thumbnailPreview && <img src={thumbnailPreview} alt="" className="upload-form__preview" />}
         <div className="manual-form__thumbnail-actions">
-          <input ref={thumbnailInputRef} type="file" accept="image/*" onChange={handleThumbnailChange} />
+          <input ref={thumbnailInputRef} type="file" accept="image/*" onChange={handleThumbnailChange} style={{ display: 'none' }} />
+          <input ref={thumbnailCameraInputRef} type="file" accept="image/*" capture="environment" onChange={handleThumbnailChange} style={{ display: 'none' }} />
+          <button type="button" className="upload-form__source-btn" onClick={() => thumbnailInputRef.current?.click()}>
+            ファイルを選択
+          </button>
+          <button type="button" className="upload-form__source-btn" onClick={() => thumbnailCameraInputRef.current?.click()}>
+            カメラで撮影
+          </button>
           {thumbnailPreview && (
             <button type="button" className="manual-form__remove-ing" onClick={removeThumbnail}>削除</button>
           )}

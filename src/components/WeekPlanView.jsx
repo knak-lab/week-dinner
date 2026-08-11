@@ -8,7 +8,7 @@ const KIND_LABEL = { main: '主菜', side: '副菜' }
 
 const favoriteMatchesKind_ = (f, kind) => (kind === 'side' ? f.category === 'side' : f.category !== 'side')
 
-function RecipeModal({ dayLabel, kind, name, recipe, ingredients, onClose }) {
+function RecipeModal({ dayLabel, kind, name, imageUrl, recipe, ingredients, onClose }) {
   return (
     <div className="recipe-modal-backdrop" onClick={onClose}>
       <div className="recipe-modal" onClick={(e) => e.stopPropagation()}>
@@ -19,6 +19,8 @@ function RecipeModal({ dayLabel, kind, name, recipe, ingredients, onClose }) {
           </div>
           <button className="recipe-modal__close" onClick={onClose} aria-label="閉じる">×</button>
         </div>
+
+        {imageUrl && <img src={imageUrl} alt="" className="recipe-modal__thumb" />}
 
         {ingredients.length > 0 && (
           <>
@@ -168,6 +170,7 @@ function FavoritePickerModal({ dayLabel, kind, favorites, onSelect, onClose }) {
               <ul className="favorite-list">
                 {filtered.map((f) => (
                   <li key={f.fav_id} className="favorite-list__item">
+                    {f.image_url && <img src={f.image_url} alt="" className="favorite-list__thumb" />}
                     <div className="favorite-list__main">{f.main}</div>
                     <button className="choose-btn" onClick={() => onSelect(f.fav_id)}>追加</button>
                   </li>
@@ -236,7 +239,10 @@ function DishCard({ day, dish, index, preferences, onChooseDish, onSetPreference
           </button>
         </div>
       </div>
-      <div className="variant__main">{dish.name}</div>
+      <div className="variant__body">
+        {dish.image_url && <img src={dish.image_url} alt="" className="variant__thumb" />}
+        <div className="variant__main">{dish.name}</div>
+      </div>
       {isChosen && (
         <div className="variant__pref">
           <button
@@ -335,7 +341,7 @@ export default function WeekPlanView({
   const handleShowRecipe = (day, dish) => {
     const dishIngredients = ingredients.filter((ing) => ing.dish_id === dish.dish_id)
     setRecipeModal({
-      dayLabel: day.day_label, kind: dish.kind, name: dish.name,
+      dayLabel: day.day_label, kind: dish.kind, name: dish.name, imageUrl: dish.image_url,
       recipe: dish.recipe, ingredients: dishIngredients,
     })
   }
