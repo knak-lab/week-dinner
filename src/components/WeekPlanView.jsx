@@ -113,6 +113,10 @@ function ManualDishModal({ dayLabel, onSave, onClose }) {
 }
 
 function FavoritePickerModal({ dayLabel, favorites, onSelect, onClose }) {
+  const [search, setSearch] = useState('')
+  const q = search.trim().toLowerCase()
+  const filtered = favorites.filter((f) => !q || f.main.toLowerCase().includes(q))
+
   return (
     <div className="recipe-modal-backdrop" onClick={onClose}>
       <div className="recipe-modal recipe-modal--narrow" onClick={(e) => e.stopPropagation()}>
@@ -123,17 +127,30 @@ function FavoritePickerModal({ dayLabel, favorites, onSelect, onClose }) {
         {favorites.length === 0 ? (
           <p className="empty-msg">お気に入りがまだありません。</p>
         ) : (
-          <ul className="favorite-list">
-            {favorites.map((f) => (
-              <li key={f.fav_id} className="favorite-list__item">
-                <div>
-                  <div className="favorite-list__main">{f.main}</div>
-                  {f.side && <div className="favorite-list__side">{f.side}</div>}
-                </div>
-                <button className="choose-btn" onClick={() => onSelect(f.fav_id)}>追加</button>
-              </li>
-            ))}
-          </ul>
+          <>
+            <input
+              type="search"
+              className="candidate-search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="料理名で検索"
+            />
+            {filtered.length === 0 ? (
+              <p className="empty-msg">該当するお気に入りがありません。</p>
+            ) : (
+              <ul className="favorite-list">
+                {filtered.map((f) => (
+                  <li key={f.fav_id} className="favorite-list__item">
+                    <div>
+                      <div className="favorite-list__main">{f.main}</div>
+                      {f.side && <div className="favorite-list__side">{f.side}</div>}
+                    </div>
+                    <button className="choose-btn" onClick={() => onSelect(f.fav_id)}>追加</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -191,7 +208,7 @@ function DishCard({ day, dish, index, preferences, onChooseDish, onSetPreference
             className={`choose-btn${isChosen ? ' choose-btn--active' : ''}`}
             onClick={() => onChooseDish(day.day_label, dish.dish_id)}
           >
-            {isChosen ? '作った' : 'これを作る'}
+            {isChosen ? '作った' : 'これをつくる'}
           </button>
         </div>
       </div>

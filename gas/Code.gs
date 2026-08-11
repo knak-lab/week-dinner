@@ -373,11 +373,12 @@ function setChosenDish(dishId) {
   const dayIdx    = DISH_HDR.indexOf('day_label')
   const chosenIdx = DISH_HDR.indexOf('chosen')
 
-  let weekId = null, dayLabel = null
+  let weekId = null, dayLabel = null, wasChosen = false
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][idIdx]) === dishId) {
       weekId = cellToStr(data[i][weekIdx])
       dayLabel = String(data[i][dayIdx])
+      wasChosen = data[i][chosenIdx] === true || data[i][chosenIdx] === 'true'
       break
     }
   }
@@ -385,7 +386,7 @@ function setChosenDish(dishId) {
 
   for (let i = 1; i < data.length; i++) {
     if (cellToStr(data[i][weekIdx]) === weekId && String(data[i][dayIdx]) === dayLabel) {
-      dishSheet.getRange(i + 1, chosenIdx + 1).setValue(String(data[i][idIdx]) === dishId)
+      dishSheet.getRange(i + 1, chosenIdx + 1).setValue(!wasChosen && String(data[i][idIdx]) === dishId)
     }
   }
   return getWeek(weekId)
@@ -904,15 +905,32 @@ function generateWeek(weekId) {
   const cheatDay  = getCheatDay()
   const dislikes  = getDislikedDishNames_()
   const candidates = getFavorites().filter(f => dislikes.indexOf(f.main) === -1)
-  const mainPool = shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'main'))
-  const sidePool = shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'side'))
+
+  const dishSheet = openOrCreateSheet_(DISH_SHEET, DISH_HDR)
+  const ingSheet  = openOrCreateSheet_(ING_SHEET, ING_HDR)
+
+  // 「これをつくる」で確定済みの献立は、再作成しても変わらないように保持する
+  const existingDishes = sheetToObjs_(dishSheet).filter(d => d.week_id === weekId)
+  const existingIngredients = sheetToObjs_(ingSheet).filter(ing => ing.week_id === weekId)
+  const keptByDay = {}
+  existingDishes.forEach(d => {
+    if (d.chosen === 'true' && !keptByDay[d.day_label]) {
+      keptByDay[d.day_label] = {
+        dish: d,
+        ingredients: existingIngredients.filter(ing => ing.dish_id === d.dish_id),
+      }
+    }
+  })
+  const keptMains = Object.values(keptByDay).map(k => k.dish.main)
+  const keptSides = Object.values(keptByDay).map(k => k.dish.side).filter(Boolean)
+
+  const mainPool = shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'main' && keptMains.indexOf(f.main) === -1))
+  const sidePool = shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'side' && keptSides.indexOf(f.main) === -1))
 
   const days = buildWeekDates_(weekId)
   const cheatIdx = DAY_LABELS.indexOf(cheatDay)
 
   const metaSheet = openOrCreateSheet_(WEEK_SHEET, WEEK_HDR)
-  const dishSheet = openOrCreateSheet_(DISH_SHEET, DISH_HDR)
-  const ingSheet  = openOrCreateSheet_(ING_SHEET, ING_HDR)
   clearWeekRows_(metaSheet, WEEK_HDR, weekId)
   clearWeekRows_(dishSheet, DISH_HDR, weekId)
   clearWeekRows_(ingSheet, ING_HDR, weekId)
@@ -944,11 +962,34 @@ function generateWeek(weekId) {
     try { return JSON.parse(c.ingredients_json || '[]') } catch (ex) { return [] }
   }
 
-  for (let slot = 0; slot < 2; slot++) {
-    DAY_LABELS.forEach((dayLabel, i) => {
-      if (i === cheatIdx) return
+  DAY_LABELS.forEach((dayLabel, i) => {
+    if (i === cheatIdx) return
+    const kept = keptByDay[dayLabel]
+    const keptOrder = kept ? Number(kept.dish.order) : null
+
+    if (kept) {
+      dishRows.push(DISH_HDR.map(col => {
+        switch (col) {
+          case 'week_id':   return weekId
+          case 'day_label': return dayLabel
+          case 'dish_id':   return kept.dish.dish_id
+          case 'order':     return kept.dish.order
+          case 'main':      return kept.dish.main
+          case 'side':      return kept.dish.side
+          case 'recipe':    return kept.dish.recipe
+          case 'chosen':    return 'true'
+          default:          return ''
+        }
+      }))
+      kept.ingredients.forEach(ing => {
+        ingRows.push([weekId, dayLabel, kept.dish.dish_id, ing.ingredient_name, ing.amount || ''])
+      })
+    }
+
+    for (let slot = 0; slot < 2; slot++) {
+      if (kept && keptOrder === slot) continue
       const mainC = nextMain()
-      if (!mainC) return
+      if (!mainC) continue
       const sideC = nextSide()
 
       const dishId = Utilities.getUuid()
@@ -978,8 +1019,8 @@ function generateWeek(weekId) {
           if (ing && ing.name) ingRows.push([weekId, dayLabel, dishId, ing.name, ing.amount || ''])
         })
       }
-    })
-  }
+    }
+  })
 
   metaSheet.getRange(metaSheet.getLastRow() + 1, 1, metaRows.length, WEEK_HDR.length).setValues(metaRows)
   if (dishRows.length > 0) {

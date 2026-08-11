@@ -107,9 +107,18 @@ export default function App() {
   const handleChooseDish = async (dayLabel, dishId) => {
     setWeekData((prev) => ({
       ...prev,
-      weekPlan: prev.weekPlan.map((d) => d.day_label === dayLabel
-        ? { ...d, dishes: d.dishes.map((dish) => ({ ...dish, chosen: dish.dish_id === dishId ? 'true' : '' })) }
-        : d),
+      weekPlan: prev.weekPlan.map((d) => {
+        if (d.day_label !== dayLabel) return d
+        const target = d.dishes.find((dish) => dish.dish_id === dishId)
+        const wasChosen = Boolean(target && (target.chosen === 'true' || target.chosen === true))
+        return {
+          ...d,
+          dishes: d.dishes.map((dish) => ({
+            ...dish,
+            chosen: !wasChosen && dish.dish_id === dishId ? 'true' : '',
+          })),
+        }
+      }),
     }))
     setLoadedShoppingWeekId(null)
     try {
