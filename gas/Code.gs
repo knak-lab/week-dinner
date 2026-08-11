@@ -9,7 +9,7 @@ const WEEK_HDR    = ['week_id', 'day_label', 'date', 'cheat', 'tags']
 const DISH_SHEET  = 'WeekDishes'
 const DISH_HDR    = ['week_id', 'day_label', 'dish_id', 'order', 'kind', 'name', 'recipe', 'chosen', 'image_url']
 const ING_SHEET    = 'Ingredients'
-const ING_HDR      = ['week_id', 'day_label', 'dish_id', 'ingredient_name', 'amount']
+const ING_HDR      = ['week_id', 'day_label', 'dish_id', 'ingredient_name', 'amount', 'note']
 const TAG_SHEET    = 'StyleTags'
 const TAG_HDR      = ['tag_id', 'label', 'created_at']
 const PREF_SHEET  = 'Preferences'
@@ -341,7 +341,7 @@ function nextDishOrder_(dishSheet, weekId, dayLabel, kind) {
 function saveDishIngredients_(weekId, dayLabel, dishId, ingredients) {
   const ingSheet = openOrCreateSheet_(ING_SHEET, ING_HDR)
   ;(ingredients || []).forEach(ing => {
-    if (ing && ing.name) appendRow_(ingSheet, ING_HDR, { week_id: weekId, day_label: dayLabel, dish_id: dishId, ingredient_name: ing.name, amount: ing.amount || '' })
+    if (ing && ing.name) appendRow_(ingSheet, ING_HDR, { week_id: weekId, day_label: dayLabel, dish_id: dishId, ingredient_name: ing.name, amount: ing.amount || '', note: ing.note || '' })
   })
 }
 
@@ -688,7 +688,7 @@ function extractDishFromImage(images) {
     '{',
     '  "main": "料理名",',
     '  "recipe": "1. 〜する\\n2. 〜する",',
-    '  "ingredients": [{"name": "食材名", "amount": "分量"}]',
+    '  "ingredients": [{"name": "食材名", "amount": "分量", "note": "備考（下味用・たれ用など使い道の分類。無ければ空文字）"}]',
     '}',
   ].join('\n')
 
@@ -730,6 +730,7 @@ function extractDishFromImage(images) {
     ingredients: (extracted.ingredients || []).map((ing) => ({
       name: stripEmojiAndSpecialChars_(ing.name || ''),
       amount: stripEmojiAndSpecialChars_(ing.amount || ''),
+      note: stripEmojiAndSpecialChars_(ing.note || ''),
     })),
     imageUrl: '',
   }
@@ -754,7 +755,7 @@ function extractDishFromText(text) {
     '{',
     '  "main": "料理名",',
     '  "recipe": "1. 〜する\\n2. 〜する",',
-    '  "ingredients": [{"name": "食材名", "amount": "分量"}]',
+    '  "ingredients": [{"name": "食材名", "amount": "分量", "note": "備考（下味用・たれ用など使い道の分類。無ければ空文字）"}]',
     '}',
     '',
     '--- キャプション文 ---',
@@ -793,6 +794,7 @@ function extractDishFromText(text) {
     ingredients: (extracted.ingredients || []).map((ing) => ({
       name: stripEmojiAndSpecialChars_(ing.name || ''),
       amount: stripEmojiAndSpecialChars_(ing.amount || ''),
+      note: stripEmojiAndSpecialChars_(ing.note || ''),
     })),
     imageUrl: '',
   }
@@ -1091,7 +1093,7 @@ function generateWeek(weekId) {
         }
       }))
       kept.ingredients.forEach(ing => {
-        ingRows.push([weekId, dayLabel, kept.dish.dish_id, ing.ingredient_name, ing.amount || ''])
+        ingRows.push([weekId, dayLabel, kept.dish.dish_id, ing.ingredient_name, ing.amount || '', ing.note || ''])
       })
     }
 
@@ -1117,7 +1119,7 @@ function generateWeek(weekId) {
       }))
 
       candidateIngredients(c).forEach(ing => {
-        if (ing && ing.name) ingRows.push([weekId, dayLabel, dishId, ing.name, ing.amount || ''])
+        if (ing && ing.name) ingRows.push([weekId, dayLabel, dishId, ing.name, ing.amount || '', ing.note || ''])
       })
     }
   }

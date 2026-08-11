@@ -56,8 +56,8 @@ function CandidateForm({ mode, initialValues, onSave, onCancel }) {
   const [recipe, setRecipe] = useState(initialValues.recipe || '')
   const [ingredientRows, setIngredientRows] = useState(
     initialValues.ingredients && initialValues.ingredients.length > 0
-      ? initialValues.ingredients.map((ing) => ({ name: ing.name || '', amount: ing.amount || '' }))
-      : [{ name: '', amount: '' }]
+      ? initialValues.ingredients.map((ing) => ({ name: ing.name || '', amount: ing.amount || '', note: ing.note || '' }))
+      : [{ name: '', amount: '', note: '' }]
   )
   const [thumbnailPreview, setThumbnailPreview] = useState(initialValues.image_url || initialValues.imageUrl || '')
   const [thumbnailFile, setThumbnailFile] = useState(null)
@@ -68,7 +68,7 @@ function CandidateForm({ mode, initialValues, onSave, onCancel }) {
 
   const updateIngredient = (idx, field, value) =>
     setIngredientRows((prev) => prev.map((ing, i) => (i === idx ? { ...ing, [field]: value } : ing)))
-  const addIngredientRow = () => setIngredientRows((prev) => [...prev, { name: '', amount: '' }])
+  const addIngredientRow = () => setIngredientRows((prev) => [...prev, { name: '', amount: '', note: '' }])
   const removeIngredientRow = (idx) => setIngredientRows((prev) => prev.filter((_, i) => i !== idx))
 
   const handleThumbnailChange = async (e) => {
@@ -96,7 +96,7 @@ function CandidateForm({ mode, initialValues, onSave, onCancel }) {
     if (!main.trim()) return
     const cleanIngredients = ingredientRows
       .filter((ing) => ing.name.trim())
-      .map((ing) => ({ name: ing.name.trim(), amount: ing.amount.trim() }))
+      .map((ing) => ({ name: ing.name.trim(), amount: ing.amount.trim(), note: ing.note.trim() }))
     setSaving(true)
     try {
       await onSave({
@@ -144,6 +144,7 @@ function CandidateForm({ mode, initialValues, onSave, onCancel }) {
           <div className="manual-form__ing-row" key={idx}>
             <input value={ing.name} onChange={(e) => updateIngredient(idx, 'name', e.target.value)} placeholder="食材名" />
             <input value={ing.amount} onChange={(e) => updateIngredient(idx, 'amount', e.target.value)} placeholder="分量" />
+            <input value={ing.note} onChange={(e) => updateIngredient(idx, 'note', e.target.value)} placeholder="備考" />
             <button type="button" className="manual-form__remove-ing" onClick={() => removeIngredientRow(idx)} aria-label="削除">×</button>
           </div>
         ))}

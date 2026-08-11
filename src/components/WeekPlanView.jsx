@@ -26,9 +26,12 @@ function RecipeModal({ dayLabel, kind, name, imageUrl, recipe, ingredients, onCl
           <>
             <h4 className="recipe-modal__section-title">材料</h4>
             <ul className="recipe-modal__ingredient-list">
-              {ingredients.map((ing) => (
-                <li key={ing.ingredient_name}>
-                  <span>{ing.ingredient_name}</span>
+              {ingredients.map((ing, idx) => (
+                <li key={ing.ingredient_name + idx}>
+                  <span>
+                    {ing.ingredient_name}
+                    {ing.note && <span className="recipe-modal__ingredient-note">（{ing.note}）</span>}
+                  </span>
                   <span className="recipe-modal__ingredient-amount">{ing.amount}</span>
                 </li>
               ))}
@@ -65,12 +68,12 @@ function AddChoiceModal({ dayLabel, kind, hasFavorites, onSelectManual, onSelect
 function ManualDishModal({ dayLabel, kind, onSave, onClose }) {
   const [name, setName] = useState('')
   const [recipe, setRecipe] = useState('')
-  const [ingredientRows, setIngredientRows] = useState([{ name: '', amount: '' }])
+  const [ingredientRows, setIngredientRows] = useState([{ name: '', amount: '', note: '' }])
 
   const updateIngredient = (idx, field, value) => {
     setIngredientRows((prev) => prev.map((ing, i) => (i === idx ? { ...ing, [field]: value } : ing)))
   }
-  const addIngredientRow = () => setIngredientRows((prev) => [...prev, { name: '', amount: '' }])
+  const addIngredientRow = () => setIngredientRows((prev) => [...prev, { name: '', amount: '', note: '' }])
   const removeIngredientRow = (idx) => setIngredientRows((prev) => prev.filter((_, i) => i !== idx))
 
   const submit = (e) => {
@@ -78,7 +81,7 @@ function ManualDishModal({ dayLabel, kind, onSave, onClose }) {
     if (!name.trim()) return
     const cleanIngredients = ingredientRows
       .filter((ing) => ing.name.trim())
-      .map((ing) => ({ name: ing.name.trim(), amount: ing.amount.trim() }))
+      .map((ing) => ({ name: ing.name.trim(), amount: ing.amount.trim(), note: ing.note.trim() }))
     onSave({ name: name.trim(), recipe: recipe.trim(), ingredients: cleanIngredients })
   }
 
@@ -100,6 +103,7 @@ function ManualDishModal({ dayLabel, kind, onSave, onClose }) {
               <div className="manual-form__ing-row" key={idx}>
                 <input value={ing.name} onChange={(e) => updateIngredient(idx, 'name', e.target.value)} placeholder="食材名" />
                 <input value={ing.amount} onChange={(e) => updateIngredient(idx, 'amount', e.target.value)} placeholder="分量" />
+                <input value={ing.note} onChange={(e) => updateIngredient(idx, 'note', e.target.value)} placeholder="備考" />
                 <button type="button" className="manual-form__remove-ing" onClick={() => removeIngredientRow(idx)} aria-label="削除">×</button>
               </div>
             ))}

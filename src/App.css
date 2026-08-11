@@ -462,6 +462,11 @@ body {
   color: var(--text-sub);
 }
 
+.recipe-modal__ingredient-note {
+  color: var(--text-sub);
+  font-size: 0.8rem;
+}
+
 .recipe-modal__body {
   white-space: pre-line;
   font-size: 0.9rem;
@@ -587,12 +592,14 @@ body {
 }
 
 .manual-form__ing-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr auto;
   gap: 6px;
+  align-items: center;
 }
 
 .manual-form__ing-row input {
-  flex: 1;
+  min-width: 0;
 }
 
 .manual-form__remove-ing {
