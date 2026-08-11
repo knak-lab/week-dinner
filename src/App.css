@@ -338,6 +338,21 @@ body {
   cursor: pointer;
 }
 
+.day-card__kind-section {
+  margin-top: 12px;
+}
+
+.day-card__kind-section:first-of-type {
+  margin-top: 0;
+}
+
+.day-card__kind-header {
+  font-size: 0.8rem;
+  font-weight: bold;
+  color: var(--accent-dark);
+  margin-bottom: 6px;
+}
+
 .choose-btn {
   font-size: 0.75rem;
   border: 1px solid var(--border);
@@ -842,29 +857,9 @@ body {
   flex-shrink: 0;
 }
 
-.variant__dish-row {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.variant__dish-label {
-  flex-shrink: 0;
-  font-size: 0.7rem;
-  color: var(--text-sub);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 0 4px;
-}
-
 .variant__main {
   font-weight: bold;
   font-size: 0.95rem;
-}
-
-.variant__side {
-  color: var(--text-sub);
-  font-size: 0.85rem;
 }
 
 .recipe-modal__main-line {

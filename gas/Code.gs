@@ -7,7 +7,7 @@ const SPREADSHEET_ID = '1msjKZ1gpog3igLrI5LLHsTKzp4bNAjRNPmGX5XdnZHQ'
 const WEEK_SHEET  = 'WeekPlan'
 const WEEK_HDR    = ['week_id', 'day_label', 'date', 'cheat', 'tags']
 const DISH_SHEET  = 'WeekDishes'
-const DISH_HDR    = ['week_id', 'day_label', 'dish_id', 'order', 'main', 'side', 'recipe', 'chosen']
+const DISH_HDR    = ['week_id', 'day_label', 'dish_id', 'order', 'kind', 'name', 'recipe', 'chosen']
 const ING_SHEET    = 'Ingredients'
 const ING_HDR      = ['week_id', 'day_label', 'dish_id', 'ingredient_name', 'amount']
 const TAG_SHEET    = 'StyleTags'
@@ -39,6 +39,7 @@ function doGet(e) {
   if (!isAuthorized(e.parameter.token)) return err('Unauthorized')
   const action = e.parameter.action || ''
   try {
+    ensureDishSchemaMigrated_()
     switch (action) {
       case 'getWeek':              return ok(getWeek(e.parameter.week_id || ''))
       case 'getShoppingList':      return ok(getShoppingList(e.parameter.week_id || ''))
@@ -55,15 +56,16 @@ function doPost(e) {
     const raw  = e.parameter.data || e.postData.contents
     const body = JSON.parse(raw)
     if (!isAuthorized(body.token)) return err('Unauthorized')
+    ensureDishSchemaMigrated_()
     switch (body.action) {
       case 'generateWeek':     return ok(generateWeek(body.week_id))
-      case 'setPreference':    return ok(setPreference(body.dish_name, body.preference, body.week_id, body.day_label, body.dish_id, body.side, body.recipe, body.ingredients))
+      case 'setPreference':    return ok(setPreference(body.dish_name, body.preference, body.week_id, body.day_label, body.dish_id, body.kind, body.recipe, body.ingredients))
       case 'addTag':           return ok(addTag(body.label))
       case 'removeTag':        return ok(removeTag(body.tag_id))
       case 'setCheatDay':      return ok(setCheatDay(body.cheat_day))
       case 'setChosenDish':    return ok(setChosenDish(body.dish_id))
-      case 'addDish':              return ok(addDish(body.week_id, body.day_label, body.main, body.side, body.recipe, body.ingredients))
-      case 'addDishFromFavorite':  return ok(addDishFromFavorite(body.week_id, body.day_label, body.fav_id))
+      case 'addDish':              return ok(addDish(body.week_id, body.day_label, body.kind, body.name, body.recipe, body.ingredients))
+      case 'addDishFromFavorite':  return ok(addDishFromFavorite(body.week_id, body.day_label, body.fav_id, body.kind))
       case 'moveDish':              return ok(moveDish(body.dish_id, body.target_day_label))
       case 'addStockIngredient':             return ok(addStockIngredient(body.name, body.quantity))
       case 'updateStockIngredientQuantity':  return ok(updateStockIngredientQuantity(body.id, body.quantity))
@@ -167,6 +169,52 @@ function shuffle_(arr) {
 }
 
 // ─────────────────────────────────────────
+//  WeekDishes 互換マイグレーション
+//  旧形式（main列・side列で主菜副菜を1行にまとめていた）が残っていたら、
+//  新形式（kind列・name列で主菜/副菜を別行にする）に自動変換する。
+//  変換後は物理シートのヘッダーが新形式になるため以降は即スキップされる（冪等）。
+// ─────────────────────────────────────────
+function ensureDishSchemaMigrated_() {
+  const ss = getSpreadsheet_()
+  const sheet = ss.getSheetByName(DISH_SHEET)
+  if (!sheet) return
+  const lastCol = sheet.getLastColumn()
+  if (lastCol === 0) return
+  const hdr = sheet.getRange(1, 1, 1, lastCol).getValues()[0]
+  if (hdr.indexOf('main') === -1 && hdr.indexOf('side') === -1) return
+
+  const oldRows = sheetToObjs_(sheet)
+
+  const splitRecipe_ = (recipe) => {
+    const text = recipe || ''
+    const mainMatch = text.match(/【主菜】\n([\s\S]*?)(?:\n\n【副菜】|$)/)
+    const sideMatch = text.match(/【副菜】\n([\s\S]*)$/)
+    if (mainMatch || sideMatch) {
+      return { main: mainMatch ? mainMatch[1].trim() : '', side: sideMatch ? sideMatch[1].trim() : '' }
+    }
+    return { main: text, side: '' }
+  }
+
+  const newRows = []
+  oldRows.forEach(r => {
+    const parts = splitRecipe_(r.recipe)
+    if (r.main) newRows.push([r.week_id, r.day_label, r.dish_id, r.order, 'main', r.main, parts.main, r.chosen])
+    if (r.side) newRows.push([r.week_id, r.day_label, Utilities.getUuid(), r.order, 'side', r.side, parts.side, r.chosen])
+  })
+
+  sheet.clear()
+  sheet.appendRow(DISH_HDR)
+  sheet.setFrozenRows(1)
+  const headerRange = sheet.getRange(1, 1, 1, DISH_HDR.length)
+  headerRange.setBackground('#E8F0FE')
+  headerRange.setFontColor('#003087')
+  headerRange.setFontWeight('bold')
+  if (newRows.length > 0) {
+    sheet.getRange(2, 1, newRows.length, DISH_HDR.length).setValues(newRows)
+  }
+}
+
+// ─────────────────────────────────────────
 //  週の献立（WeekPlan＝曜日メタ情報 / WeekDishes＝献立候補 / Ingredients）
 // ─────────────────────────────────────────
 
@@ -181,7 +229,10 @@ function getWeek(weekId) {
     dishesByDay[d.day_label].push(d)
   })
   Object.keys(dishesByDay).forEach(day => {
-    dishesByDay[day].sort((a, b) => Number(a.order) - Number(b.order))
+    dishesByDay[day].sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind === 'main' ? -1 : 1
+      return Number(a.order) - Number(b.order)
+    })
   })
 
   const weekPlan = dayMetaRows
@@ -248,8 +299,8 @@ function setDayNotCheat_(weekId, dayLabel) {
 //  献立候補（WeekDishes）の追加・移動・選択
 // ─────────────────────────────────────────
 
-function nextDishOrder_(dishSheet, weekId, dayLabel) {
-  const rows = sheetToObjs_(dishSheet).filter(r => r.week_id === weekId && r.day_label === dayLabel)
+function nextDishOrder_(dishSheet, weekId, dayLabel, kind) {
+  const rows = sheetToObjs_(dishSheet).filter(r => r.week_id === weekId && r.day_label === dayLabel && r.kind === kind)
   if (rows.length === 0) return 0
   return Math.max.apply(null, rows.map(r => Number(r.order) || 0)) + 1
 }
@@ -261,32 +312,33 @@ function saveDishIngredients_(weekId, dayLabel, dishId, ingredients) {
   })
 }
 
-function addDish(weekId, dayLabel, main, side, recipe, ingredients) {
+function addDish(weekId, dayLabel, kind, name, recipe, ingredients) {
   if (!weekId || !dayLabel) return { error: 'week_id and day_label are required' }
-  if (!main) return { error: 'main is required' }
+  if (!name) return { error: 'name is required' }
+  const normKind = kind === 'side' ? 'side' : 'main'
 
   ensureDayMeta_(weekId, dayLabel)
   setDayNotCheat_(weekId, dayLabel)
 
   const dishSheet = openOrCreateSheet_(DISH_SHEET, DISH_HDR)
   const dishId = Utilities.getUuid()
-  const order  = nextDishOrder_(dishSheet, weekId, dayLabel)
+  const order  = nextDishOrder_(dishSheet, weekId, dayLabel, normKind)
   appendRow_(dishSheet, DISH_HDR, {
     week_id: weekId, day_label: dayLabel, dish_id: dishId, order,
-    main, side: side || '', recipe: recipe || '', chosen: '',
+    kind: normKind, name, recipe: recipe || '', chosen: '',
   })
   saveDishIngredients_(weekId, dayLabel, dishId, ingredients)
 
   return getWeek(weekId)
 }
 
-function addDishFromFavorite(weekId, dayLabel, favId) {
+function addDishFromFavorite(weekId, dayLabel, favId, kind) {
   if (!favId) return { error: 'fav_id is required' }
   const fav = getFavorites().find(f => f.fav_id === favId)
   if (!fav) return { error: 'favorite not found' }
   let ingredients = []
   try { ingredients = JSON.parse(fav.ingredients_json || '[]') } catch (ex) { ingredients = [] }
-  return addDish(weekId, dayLabel, fav.main, fav.side, fav.recipe, ingredients)
+  return addDish(weekId, dayLabel, kind, fav.main, fav.recipe, ingredients)
 }
 
 function moveDish(dishId, targetDayLabel) {
@@ -298,6 +350,7 @@ function moveDish(dishId, targetDayLabel) {
   const weekIdx   = DISH_HDR.indexOf('week_id')
   const dayIdx    = DISH_HDR.indexOf('day_label')
   const orderIdx  = DISH_HDR.indexOf('order')
+  const kindIdx   = DISH_HDR.indexOf('kind')
   const chosenIdx = DISH_HDR.indexOf('chosen')
 
   let sourceRow = -1
@@ -308,6 +361,7 @@ function moveDish(dishId, targetDayLabel) {
 
   const weekId = cellToStr(data[sourceRow][weekIdx])
   const sourceDayLabel = String(data[sourceRow][dayIdx])
+  const kind = String(data[sourceRow][kindIdx])
   if (sourceDayLabel === targetDayLabel) return getWeek(weekId)
 
   ensureDayMeta_(weekId, targetDayLabel)
@@ -316,7 +370,7 @@ function moveDish(dishId, targetDayLabel) {
   const targetRows = []
   for (let i = 1; i < data.length; i++) {
     if (i === sourceRow) continue
-    if (cellToStr(data[i][weekIdx]) === weekId && String(data[i][dayIdx]) === targetDayLabel) targetRows.push(i)
+    if (cellToStr(data[i][weekIdx]) === weekId && String(data[i][dayIdx]) === targetDayLabel && String(data[i][kindIdx]) === kind) targetRows.push(i)
   }
 
   if (targetRows.length === 1) {
@@ -337,7 +391,7 @@ function moveDish(dishId, targetDayLabel) {
     moveDishIngredients_(weekId, sourceDayLabel, targetDayLabel, dishId, targetDishId)
   } else {
     // 0件または2件以上のときは単純追加（移動元からは削除）
-    const newOrder = nextDishOrder_(dishSheet, weekId, targetDayLabel)
+    const newOrder = nextDishOrder_(dishSheet, weekId, targetDayLabel, kind)
     dishSheet.getRange(sourceRow + 1, dayIdx + 1).setValue(targetDayLabel)
     dishSheet.getRange(sourceRow + 1, orderIdx + 1).setValue(newOrder)
     dishSheet.getRange(sourceRow + 1, chosenIdx + 1).setValue(false)
@@ -371,13 +425,15 @@ function setChosenDish(dishId) {
   const idIdx     = DISH_HDR.indexOf('dish_id')
   const weekIdx   = DISH_HDR.indexOf('week_id')
   const dayIdx    = DISH_HDR.indexOf('day_label')
+  const kindIdx   = DISH_HDR.indexOf('kind')
   const chosenIdx = DISH_HDR.indexOf('chosen')
 
-  let weekId = null, dayLabel = null, wasChosen = false
+  let weekId = null, dayLabel = null, kind = null, wasChosen = false
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][idIdx]) === dishId) {
       weekId = cellToStr(data[i][weekIdx])
       dayLabel = String(data[i][dayIdx])
+      kind = String(data[i][kindIdx])
       wasChosen = data[i][chosenIdx] === true || data[i][chosenIdx] === 'true'
       break
     }
@@ -385,7 +441,7 @@ function setChosenDish(dishId) {
   if (!weekId) return { error: 'dish not found' }
 
   for (let i = 1; i < data.length; i++) {
-    if (cellToStr(data[i][weekIdx]) === weekId && String(data[i][dayIdx]) === dayLabel) {
+    if (cellToStr(data[i][weekIdx]) === weekId && String(data[i][dayIdx]) === dayLabel && String(data[i][kindIdx]) === kind) {
       dishSheet.getRange(i + 1, chosenIdx + 1).setValue(!wasChosen && String(data[i][idIdx]) === dishId)
     }
   }
@@ -426,7 +482,7 @@ function removeTag(tagId) {
 //  好き → お気に入りへ自動追加／苦手 → お気に入りから自動削除
 // ─────────────────────────────────────────
 
-function setPreference(dishName, preference, weekId, dayLabel, dishId, side, recipe, ingredients) {
+function setPreference(dishName, preference, weekId, dayLabel, dishId, kind, recipe, ingredients) {
   if (!dishName || !preference) return { error: 'dish_name and preference are required' }
   const sheet = openOrCreateSheet_(PREF_SHEET, PREF_HDR)
   appendRow_(sheet, PREF_HDR, {
@@ -435,7 +491,7 @@ function setPreference(dishName, preference, weekId, dayLabel, dishId, side, rec
   })
 
   if (preference === 'like') {
-    addFavorite_(dishName, side, recipe, ingredients)
+    addFavorite_(dishName, recipe, ingredients, kind === 'side' ? 'side' : 'main')
   } else if (preference === 'dislike') {
     removeFavoriteByMain_(dishName)
   }
@@ -457,14 +513,15 @@ function getFavorites() {
   return sheetToObjs_(openOrCreateSheet_(FAV_SHEET, FAV_HDR))
 }
 
-function addFavorite_(main, side, recipe, ingredients) {
+function addFavorite_(main, recipe, ingredients, category) {
   if (!main) return
   const sheet = openOrCreateSheet_(FAV_SHEET, FAV_HDR)
   const existing = sheetToObjs_(sheet).find(r => r.main === main)
   if (existing) return
   appendRow_(sheet, FAV_HDR, {
-    fav_id: Utilities.getUuid(), main, side: side || '', recipe: recipe || '',
+    fav_id: Utilities.getUuid(), main, side: '', recipe: recipe || '',
     ingredients_json: JSON.stringify(ingredients || []), created_at: nowStr_(),
+    category: normalizeCandidateCategory_(category),
   })
 }
 
@@ -845,23 +902,30 @@ function getShoppingList(weekId) {
     dishesByDay[day].sort((a, b) => Number(a.order) - Number(b.order))
   })
 
-  const chosenDishIdByDay = {}
+  const chosenDishIdsByDay = {}
   Object.entries(dishesByDay).forEach(([day, list]) => {
-    const chosen = list.find(d => d.chosen === 'true' || d.chosen === true)
-    chosenDishIdByDay[day] = chosen ? chosen.dish_id : (list[0] ? list[0].dish_id : null)
+    const ids = []
+    ;['main', 'side'].forEach(kind => {
+      const ofKind = list.filter(d => d.kind === kind)
+      if (ofKind.length === 0) return
+      const chosen = ofKind.find(d => d.chosen === 'true' || d.chosen === true)
+      ids.push(chosen ? chosen.dish_id : ofKind[0].dish_id)
+    })
+    chosenDishIdsByDay[day] = ids
   })
 
   const groups = SHOPPING_GROUPS.map(days => {
     const itemMap = {}
     days.forEach(day => {
-      const dishId = chosenDishIdByDay[day]
-      if (!dishId) return
-      ingredients
-        .filter(ing => ing.day_label === day && ing.dish_id === dishId)
-        .forEach(ing => {
-          if (!itemMap[ing.ingredient_name]) itemMap[ing.ingredient_name] = []
-          if (ing.amount) itemMap[ing.ingredient_name].push(ing.amount)
-        })
+      const dishIds = chosenDishIdsByDay[day] || []
+      dishIds.forEach(dishId => {
+        ingredients
+          .filter(ing => ing.day_label === day && ing.dish_id === dishId)
+          .forEach(ing => {
+            if (!itemMap[ing.ingredient_name]) itemMap[ing.ingredient_name] = []
+            if (ing.amount) itemMap[ing.ingredient_name].push(ing.amount)
+          })
+      })
     })
     return {
       label: days.join('・'),
@@ -909,23 +973,26 @@ function generateWeek(weekId) {
   const dishSheet = openOrCreateSheet_(DISH_SHEET, DISH_HDR)
   const ingSheet  = openOrCreateSheet_(ING_SHEET, ING_HDR)
 
-  // 「これをつくる」で確定済みの献立は、再作成しても変わらないように保持する
+  // 「これをつくる」で確定済みの献立は、日×主菜/副菜ごとに再作成しても変わらないように保持する
   const existingDishes = sheetToObjs_(dishSheet).filter(d => d.week_id === weekId)
   const existingIngredients = sheetToObjs_(ingSheet).filter(ing => ing.week_id === weekId)
-  const keptByDay = {}
+  const keptByDayKind = {}
   existingDishes.forEach(d => {
-    if (d.chosen === 'true' && !keptByDay[d.day_label]) {
-      keptByDay[d.day_label] = {
+    const key = d.day_label + '__' + d.kind
+    if (d.chosen === 'true' && !keptByDayKind[key]) {
+      keptByDayKind[key] = {
         dish: d,
         ingredients: existingIngredients.filter(ing => ing.dish_id === d.dish_id),
       }
     }
   })
-  const keptMains = Object.values(keptByDay).map(k => k.dish.main)
-  const keptSides = Object.values(keptByDay).map(k => k.dish.side).filter(Boolean)
+  const keptNames = { main: [], side: [] }
+  Object.values(keptByDayKind).forEach(k => {
+    if (keptNames[k.dish.kind]) keptNames[k.dish.kind].push(k.dish.name)
+  })
 
-  const mainPool = shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'main' && keptMains.indexOf(f.main) === -1))
-  const sidePool = shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'side' && keptSides.indexOf(f.main) === -1))
+  const mainPool = shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'main' && keptNames.main.indexOf(f.main) === -1))
+  const sidePool = shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'side' && keptNames.side.indexOf(f.main) === -1))
 
   const days = buildWeekDates_(weekId)
   const cheatIdx = DAY_LABELS.indexOf(cheatDay)
@@ -962,9 +1029,11 @@ function generateWeek(weekId) {
     try { return JSON.parse(c.ingredients_json || '[]') } catch (ex) { return [] }
   }
 
-  DAY_LABELS.forEach((dayLabel, i) => {
-    if (i === cheatIdx) return
-    const kept = keptByDay[dayLabel]
+  const SLOTS_PER_KIND = 2
+
+  const fillKind = (dayLabel, kind, nextCandidate) => {
+    const key = dayLabel + '__' + kind
+    const kept = keptByDayKind[key]
     const keptOrder = kept ? Number(kept.dish.order) : null
 
     if (kept) {
@@ -974,8 +1043,8 @@ function generateWeek(weekId) {
           case 'day_label': return dayLabel
           case 'dish_id':   return kept.dish.dish_id
           case 'order':     return kept.dish.order
-          case 'main':      return kept.dish.main
-          case 'side':      return kept.dish.side
+          case 'kind':      return kind
+          case 'name':      return kept.dish.name
           case 'recipe':    return kept.dish.recipe
           case 'chosen':    return 'true'
           default:          return ''
@@ -986,40 +1055,36 @@ function generateWeek(weekId) {
       })
     }
 
-    for (let slot = 0; slot < 2; slot++) {
+    for (let slot = 0; slot < SLOTS_PER_KIND; slot++) {
       if (kept && keptOrder === slot) continue
-      const mainC = nextMain()
-      if (!mainC) continue
-      const sideC = nextSide()
+      const c = nextCandidate()
+      if (!c) continue
 
       const dishId = Utilities.getUuid()
-      const recipeParts = []
-      if (mainC.recipe) recipeParts.push('【主菜】\n' + mainC.recipe)
-      if (sideC && sideC.recipe) recipeParts.push('【副菜】\n' + sideC.recipe)
-
       dishRows.push(DISH_HDR.map(col => {
         switch (col) {
           case 'week_id':   return weekId
           case 'day_label': return dayLabel
           case 'dish_id':   return dishId
           case 'order':     return slot
-          case 'main':      return mainC.main
-          case 'side':      return sideC ? sideC.main : ''
-          case 'recipe':    return recipeParts.join('\n\n')
+          case 'kind':      return kind
+          case 'name':      return c.main
+          case 'recipe':    return c.recipe || ''
           case 'chosen':    return ''
           default:          return ''
         }
       }))
 
-      candidateIngredients(mainC).forEach(ing => {
+      candidateIngredients(c).forEach(ing => {
         if (ing && ing.name) ingRows.push([weekId, dayLabel, dishId, ing.name, ing.amount || ''])
       })
-      if (sideC) {
-        candidateIngredients(sideC).forEach(ing => {
-          if (ing && ing.name) ingRows.push([weekId, dayLabel, dishId, ing.name, ing.amount || ''])
-        })
-      }
     }
+  }
+
+  DAY_LABELS.forEach((dayLabel, i) => {
+    if (i === cheatIdx) return
+    fillKind(dayLabel, 'main', nextMain)
+    fillKind(dayLabel, 'side', nextSide)
   })
 
   metaSheet.getRange(metaSheet.getLastRow() + 1, 1, metaRows.length, WEEK_HDR.length).setValues(metaRows)

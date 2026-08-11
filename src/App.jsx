@@ -110,13 +110,14 @@ export default function App() {
       weekPlan: prev.weekPlan.map((d) => {
         if (d.day_label !== dayLabel) return d
         const target = d.dishes.find((dish) => dish.dish_id === dishId)
-        const wasChosen = Boolean(target && (target.chosen === 'true' || target.chosen === true))
+        if (!target) return d
+        const wasChosen = target.chosen === 'true' || target.chosen === true
         return {
           ...d,
-          dishes: d.dishes.map((dish) => ({
-            ...dish,
-            chosen: !wasChosen && dish.dish_id === dishId ? 'true' : '',
-          })),
+          dishes: d.dishes.map((dish) => {
+            if (dish.kind !== target.kind) return dish
+            return { ...dish, chosen: !wasChosen && dish.dish_id === dishId ? 'true' : '' }
+          }),
         }
       }),
     }))
@@ -135,19 +136,19 @@ export default function App() {
 
     setWeekData((prev) => ({
       ...prev,
-      preferences: [...prev.preferences, { dish_name: dish.main, preference, week_id: weekId, day_label: dayLabel, dish_id: dish.dish_id }],
+      preferences: [...prev.preferences, { dish_name: dish.name, preference, week_id: weekId, day_label: dayLabel, dish_id: dish.dish_id }],
     }))
     try {
-      const res = await gasApi.setPreference(dish.main, preference, weekId, dayLabel, dish.dish_id, dish.side, dish.recipe, dishIngredients)
+      const res = await gasApi.setPreference(dish.name, preference, weekId, dayLabel, dish.dish_id, dish.kind, dish.recipe, dishIngredients)
       setWeekData((prev) => ({ ...prev, favorites: res.favorites }))
     } catch (e) {
       setError(e.message)
     }
   }
 
-  const handleAddDish = async (dayLabel, payload) => {
+  const handleAddDish = async (dayLabel, kind, payload) => {
     try {
-      const res = await gasApi.addDish(weekId, dayLabel, payload.main, payload.side, payload.recipe, payload.ingredients)
+      const res = await gasApi.addDish(weekId, dayLabel, kind, payload.name, payload.recipe, payload.ingredients)
       setWeekData(res)
       setLoadedShoppingWeekId(null)
     } catch (e) {
@@ -155,9 +156,9 @@ export default function App() {
     }
   }
 
-  const handleAddDishFromFavorite = async (dayLabel, favId) => {
+  const handleAddDishFromFavorite = async (dayLabel, kind, favId) => {
     try {
-      const res = await gasApi.addDishFromFavorite(weekId, dayLabel, favId)
+      const res = await gasApi.addDishFromFavorite(weekId, dayLabel, favId, kind)
       setWeekData(res)
       setLoadedShoppingWeekId(null)
     } catch (e) {

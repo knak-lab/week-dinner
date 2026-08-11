@@ -74,16 +74,16 @@ export const gasApi = {
   getStockIngredients: () => get('getStockIngredients'),
 
   generateWeek:     (weekId) => post({ action: 'generateWeek', week_id: weekId }),
-  setPreference:    (dishName, preference, weekId, dayLabel, dishId, side, recipe, ingredients) =>
-    post({ action: 'setPreference', dish_name: dishName, preference, week_id: weekId, day_label: dayLabel, dish_id: dishId, side, recipe, ingredients }),
+  setPreference:    (dishName, preference, weekId, dayLabel, dishId, kind, recipe, ingredients) =>
+    post({ action: 'setPreference', dish_name: dishName, preference, week_id: weekId, day_label: dayLabel, dish_id: dishId, kind, recipe, ingredients }),
   addTag:           (label) => post({ action: 'addTag', label }),
   removeTag:        (tagId) => post({ action: 'removeTag', tag_id: tagId }),
   setCheatDay:      (cheatDay) => post({ action: 'setCheatDay', cheat_day: cheatDay }),
   setChosenDish:    (dishId) => post({ action: 'setChosenDish', dish_id: dishId }),
-  addDish:              (weekId, dayLabel, main, side, recipe, ingredients) =>
-    post({ action: 'addDish', week_id: weekId, day_label: dayLabel, main, side, recipe, ingredients }),
-  addDishFromFavorite:  (weekId, dayLabel, favId) =>
-    post({ action: 'addDishFromFavorite', week_id: weekId, day_label: dayLabel, fav_id: favId }),
+  addDish:              (weekId, dayLabel, kind, name, recipe, ingredients) =>
+    post({ action: 'addDish', week_id: weekId, day_label: dayLabel, kind, name, recipe, ingredients }),
+  addDishFromFavorite:  (weekId, dayLabel, favId, kind) =>
+    post({ action: 'addDishFromFavorite', week_id: weekId, day_label: dayLabel, fav_id: favId, kind }),
   moveDish:             (dishId, targetDayLabel) =>
     post({ action: 'moveDish', dish_id: dishId, target_day_label: targetDayLabel }),
   addStockIngredient:            (name, quantity) => post({ action: 'addStockIngredient', name, quantity }),

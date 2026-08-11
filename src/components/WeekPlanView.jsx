@@ -4,15 +4,18 @@ const DAY_LABELS = ['月', '火', '水', '木', '金', '土', '日']
 
 const dayLabelFull_ = (label) => `${label}曜`
 
-function RecipeModal({ dayLabel, main, side, recipe, ingredients, onClose }) {
+const KIND_LABEL = { main: '主菜', side: '副菜' }
+
+const favoriteMatchesKind_ = (f, kind) => (kind === 'side' ? f.category === 'side' : f.category !== 'side')
+
+function RecipeModal({ dayLabel, kind, name, recipe, ingredients, onClose }) {
   return (
     <div className="recipe-modal-backdrop" onClick={onClose}>
       <div className="recipe-modal" onClick={(e) => e.stopPropagation()}>
         <div className="recipe-modal__header">
           <div>
-            <h3 className="recipe-modal__title">{dayLabelFull_(dayLabel)}</h3>
-            <p className="recipe-modal__main-line">主菜：{main}</p>
-            {side && <p className="recipe-modal__side">副菜：{side}</p>}
+            <h3 className="recipe-modal__title">{dayLabelFull_(dayLabel)}：{KIND_LABEL[kind] || ''}</h3>
+            <p className="recipe-modal__main-line">{name}</p>
           </div>
           <button className="recipe-modal__close" onClick={onClose} aria-label="閉じる">×</button>
         </div>
@@ -38,12 +41,12 @@ function RecipeModal({ dayLabel, main, side, recipe, ingredients, onClose }) {
   )
 }
 
-function AddChoiceModal({ dayLabel, hasFavorites, onSelectManual, onSelectFavorite, onClose }) {
+function AddChoiceModal({ dayLabel, kind, hasFavorites, onSelectManual, onSelectFavorite, onClose }) {
   return (
     <div className="recipe-modal-backdrop" onClick={onClose}>
       <div className="recipe-modal recipe-modal--narrow" onClick={(e) => e.stopPropagation()}>
         <div className="recipe-modal__header">
-          <h3 className="recipe-modal__title">{dayLabelFull_(dayLabel)}に献立を追加</h3>
+          <h3 className="recipe-modal__title">{dayLabelFull_(dayLabel)}に{KIND_LABEL[kind]}を追加</h3>
           <button className="recipe-modal__close" onClick={onClose} aria-label="閉じる">×</button>
         </div>
         <div className="choice-list">
@@ -57,9 +60,8 @@ function AddChoiceModal({ dayLabel, hasFavorites, onSelectManual, onSelectFavori
   )
 }
 
-function ManualDishModal({ dayLabel, onSave, onClose }) {
-  const [main, setMain] = useState('')
-  const [side, setSide] = useState('')
+function ManualDishModal({ dayLabel, kind, onSave, onClose }) {
+  const [name, setName] = useState('')
   const [recipe, setRecipe] = useState('')
   const [ingredientRows, setIngredientRows] = useState([{ name: '', amount: '' }])
 
@@ -71,27 +73,24 @@ function ManualDishModal({ dayLabel, onSave, onClose }) {
 
   const submit = (e) => {
     e.preventDefault()
-    if (!main.trim()) return
+    if (!name.trim()) return
     const cleanIngredients = ingredientRows
       .filter((ing) => ing.name.trim())
       .map((ing) => ({ name: ing.name.trim(), amount: ing.amount.trim() }))
-    onSave({ main: main.trim(), side: side.trim(), recipe: recipe.trim(), ingredients: cleanIngredients })
+    onSave({ name: name.trim(), recipe: recipe.trim(), ingredients: cleanIngredients })
   }
 
   return (
     <div className="recipe-modal-backdrop" onClick={onClose}>
       <div className="recipe-modal" onClick={(e) => e.stopPropagation()}>
         <div className="recipe-modal__header">
-          <h3 className="recipe-modal__title">{dayLabelFull_(dayLabel)}に手動で献立を登録</h3>
+          <h3 className="recipe-modal__title">{dayLabelFull_(dayLabel)}に{KIND_LABEL[kind]}を手動で登録</h3>
           <button className="recipe-modal__close" onClick={onClose} aria-label="閉じる">×</button>
         </div>
 
         <form className="manual-form" onSubmit={submit}>
-          <label className="manual-form__label">メイン料理</label>
-          <input value={main} onChange={(e) => setMain(e.target.value)} placeholder="例：鮭の塩麹焼き" required />
-
-          <label className="manual-form__label">副菜</label>
-          <input value={side} onChange={(e) => setSide(e.target.value)} placeholder="例：ほうれん草の煮浸し" />
+          <label className="manual-form__label">{KIND_LABEL[kind]}名</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="例：鮭の塩麹焼き" required />
 
           <label className="manual-form__label">材料</label>
           <div className="manual-form__ingredients">
@@ -124,12 +123,13 @@ function favoriteIngredientNames_(f) {
   }
 }
 
-function FavoritePickerModal({ dayLabel, favorites, onSelect, onClose }) {
+function FavoritePickerModal({ dayLabel, kind, favorites, onSelect, onClose }) {
   const [search, setSearch] = useState('')
   const [ingredientFilter, setIngredientFilter] = useState('')
   const q = search.trim().toLowerCase()
   const iq = ingredientFilter.trim().toLowerCase()
-  const filtered = favorites.filter((f) => {
+  const scoped = favorites.filter((f) => favoriteMatchesKind_(f, kind))
+  const filtered = scoped.filter((f) => {
     if (q && !f.main.toLowerCase().includes(q)) return false
     if (iq && !favoriteIngredientNames_(f).some((name) => name.toLowerCase().includes(iq))) return false
     return true
@@ -139,11 +139,11 @@ function FavoritePickerModal({ dayLabel, favorites, onSelect, onClose }) {
     <div className="recipe-modal-backdrop" onClick={onClose}>
       <div className="recipe-modal recipe-modal--narrow" onClick={(e) => e.stopPropagation()}>
         <div className="recipe-modal__header">
-          <h3 className="recipe-modal__title">{dayLabelFull_(dayLabel)}にお気に入りから追加</h3>
+          <h3 className="recipe-modal__title">{dayLabelFull_(dayLabel)}に{KIND_LABEL[kind]}をお気に入りから追加</h3>
           <button className="recipe-modal__close" onClick={onClose} aria-label="閉じる">×</button>
         </div>
-        {favorites.length === 0 ? (
-          <p className="empty-msg">お気に入りがまだありません。</p>
+        {scoped.length === 0 ? (
+          <p className="empty-msg">{KIND_LABEL[kind]}のお気に入りがまだありません。</p>
         ) : (
           <>
             <div className="favorite-picker__filters">
@@ -168,10 +168,7 @@ function FavoritePickerModal({ dayLabel, favorites, onSelect, onClose }) {
               <ul className="favorite-list">
                 {filtered.map((f) => (
                   <li key={f.fav_id} className="favorite-list__item">
-                    <div>
-                      <div className="favorite-list__main">{f.main}</div>
-                      {f.side && <div className="favorite-list__side">{f.side}</div>}
-                    </div>
+                    <div className="favorite-list__main">{f.main}</div>
                     <button className="choose-btn" onClick={() => onSelect(f.fav_id)}>追加</button>
                   </li>
                 ))}
@@ -218,7 +215,7 @@ function dishPreference(preferences, dishName) {
 
 function DishCard({ day, dish, index, preferences, onChooseDish, onSetPreference, onShowRecipe, onOpenMove }) {
   const isChosen = dish.chosen === 'true' || dish.chosen === true
-  const pref = dishPreference(preferences, dish.main)
+  const pref = dishPreference(preferences, dish.name)
 
   return (
     <div className={`variant${isChosen ? ' variant--chosen' : ''}`}>
@@ -239,16 +236,7 @@ function DishCard({ day, dish, index, preferences, onChooseDish, onSetPreference
           </button>
         </div>
       </div>
-      <div className="variant__dish-row">
-        <span className="variant__dish-label">主菜</span>
-        <span className="variant__main">{dish.main}</span>
-      </div>
-      {dish.side && (
-        <div className="variant__dish-row">
-          <span className="variant__dish-label">副菜</span>
-          <span className="variant__side">{dish.side}</span>
-        </div>
-      )}
+      <div className="variant__main">{dish.name}</div>
       {isChosen && (
         <div className="variant__pref">
           <button
@@ -269,27 +257,10 @@ function DishCard({ day, dish, index, preferences, onChooseDish, onSetPreference
   )
 }
 
-function DayCard({ day, preferences, onChooseDish, onSetPreference, onShowRecipe, onOpenMove, onOpenAddChoice }) {
-  const isCheat = day.cheat === 'true' || day.cheat === true
-  const tags = (day.tags || '').split(',').filter(Boolean)
-  const dishes = day.dishes || []
-
+function DishSection({ kind, day, dishes, preferences, onChooseDish, onSetPreference, onShowRecipe, onOpenMove, onOpenAddChoice }) {
   return (
-    <div className={`day-card${isCheat ? ' day-card--cheat' : ''}`}>
-      <div className="day-card__header">
-        <span className="day-card__label">{dayLabelFull_(day.day_label)}</span>
-        <span className="day-card__date">{day.date}</span>
-        {tags.length > 0 && (
-          <span className="day-card__tags">
-            {tags.map((t) => <span key={t} className="tag-badge">{t}</span>)}
-          </span>
-        )}
-      </div>
-
-      {isCheat && dishes.length === 0 && (
-        <div className="day-card__cheat-badge">チートデイ（外食・惣菜）</div>
-      )}
-
+    <div className="day-card__kind-section">
+      <div className="day-card__kind-header">{KIND_LABEL[kind]}</div>
       {dishes.length > 0 && (
         <div className="day-card__variants">
           {dishes.map((dish, idx) => (
@@ -307,10 +278,46 @@ function DayCard({ day, preferences, onChooseDish, onSetPreference, onShowRecipe
           ))}
         </div>
       )}
-
-      <button className="add-dish-btn" onClick={() => onOpenAddChoice(day.day_label)}>
-        + 献立を追加
+      <button className="add-dish-btn" onClick={() => onOpenAddChoice(day.day_label, kind)}>
+        + {KIND_LABEL[kind]}を追加
       </button>
+    </div>
+  )
+}
+
+function DayCard({ day, preferences, onChooseDish, onSetPreference, onShowRecipe, onOpenMove, onOpenAddChoice }) {
+  const isCheat = day.cheat === 'true' || day.cheat === true
+  const tags = (day.tags || '').split(',').filter(Boolean)
+  const dishes = day.dishes || []
+  const mainDishes = dishes.filter((d) => d.kind !== 'side')
+  const sideDishes = dishes.filter((d) => d.kind === 'side')
+
+  return (
+    <div className={`day-card${isCheat ? ' day-card--cheat' : ''}`}>
+      <div className="day-card__header">
+        <span className="day-card__label">{dayLabelFull_(day.day_label)}</span>
+        <span className="day-card__date">{day.date}</span>
+        {tags.length > 0 && (
+          <span className="day-card__tags">
+            {tags.map((t) => <span key={t} className="tag-badge">{t}</span>)}
+          </span>
+        )}
+      </div>
+
+      {isCheat && dishes.length === 0 && (
+        <div className="day-card__cheat-badge">チートデイ（外食・惣菜）</div>
+      )}
+
+      <DishSection
+        kind="main" day={day} dishes={mainDishes} preferences={preferences}
+        onChooseDish={onChooseDish} onSetPreference={onSetPreference}
+        onShowRecipe={onShowRecipe} onOpenMove={onOpenMove} onOpenAddChoice={onOpenAddChoice}
+      />
+      <DishSection
+        kind="side" day={day} dishes={sideDishes} preferences={preferences}
+        onChooseDish={onChooseDish} onSetPreference={onSetPreference}
+        onShowRecipe={onShowRecipe} onOpenMove={onOpenMove} onOpenAddChoice={onOpenAddChoice}
+      />
     </div>
   )
 }
@@ -328,34 +335,34 @@ export default function WeekPlanView({
   const handleShowRecipe = (day, dish) => {
     const dishIngredients = ingredients.filter((ing) => ing.dish_id === dish.dish_id)
     setRecipeModal({
-      dayLabel: day.day_label, main: dish.main, side: dish.side,
+      dayLabel: day.day_label, kind: dish.kind, name: dish.name,
       recipe: dish.recipe, ingredients: dishIngredients,
     })
   }
 
-  const openAddChoice = (dayLabel) => setAddChoiceModal({ dayLabel })
+  const openAddChoice = (dayLabel, kind) => setAddChoiceModal({ dayLabel, kind })
 
   const openMove = (dish, dayLabel) => setMoveDishModal({ dishId: dish.dish_id, dayLabel })
 
   const handleSelectManual = () => {
-    const dayLabel = addChoiceModal.dayLabel
+    const { dayLabel, kind } = addChoiceModal
     setAddChoiceModal(null)
-    setManualDishModal({ dayLabel })
+    setManualDishModal({ dayLabel, kind })
   }
 
   const handleSelectFavorite = () => {
-    const dayLabel = addChoiceModal.dayLabel
+    const { dayLabel, kind } = addChoiceModal
     setAddChoiceModal(null)
-    setFavoritePickerModal({ dayLabel })
+    setFavoritePickerModal({ dayLabel, kind })
   }
 
   const handleManualSave = (payload) => {
-    onAddDish(manualDishModal.dayLabel, payload)
+    onAddDish(manualDishModal.dayLabel, manualDishModal.kind, payload)
     setManualDishModal(null)
   }
 
   const handleFavoriteSelect = (favId) => {
-    onAddDishFromFavorite(favoritePickerModal.dayLabel, favId)
+    onAddDishFromFavorite(favoritePickerModal.dayLabel, favoritePickerModal.kind, favId)
     setFavoritePickerModal(null)
   }
 
@@ -402,7 +409,8 @@ export default function WeekPlanView({
       {addChoiceModal && (
         <AddChoiceModal
           dayLabel={addChoiceModal.dayLabel}
-          hasFavorites={favorites.length > 0}
+          kind={addChoiceModal.kind}
+          hasFavorites={favorites.some((f) => favoriteMatchesKind_(f, addChoiceModal.kind))}
           onSelectManual={handleSelectManual}
           onSelectFavorite={handleSelectFavorite}
           onClose={() => setAddChoiceModal(null)}
@@ -412,6 +420,7 @@ export default function WeekPlanView({
       {manualDishModal && (
         <ManualDishModal
           dayLabel={manualDishModal.dayLabel}
+          kind={manualDishModal.kind}
           onSave={handleManualSave}
           onClose={() => setManualDishModal(null)}
         />
@@ -420,6 +429,7 @@ export default function WeekPlanView({
       {favoritePickerModal && (
         <FavoritePickerModal
           dayLabel={favoritePickerModal.dayLabel}
+          kind={favoritePickerModal.kind}
           favorites={favorites}
           onSelect={handleFavoriteSelect}
           onClose={() => setFavoritePickerModal(null)}
