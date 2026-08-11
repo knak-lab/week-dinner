@@ -483,13 +483,18 @@ function removeFavoriteByMain_(main) {
 //  候補（スクショから登録・手動保存。お気に入りと同じシートを使う）
 // ─────────────────────────────────────────
 
+const CANDIDATE_CATEGORIES = ['main', 'side', 'sweets', 'makeahead']
+function normalizeCandidateCategory_(category) {
+  return CANDIDATE_CATEGORIES.indexOf(category) === -1 ? 'main' : category
+}
+
 function addCandidate(main, recipe, ingredients, imageUrl, category) {
   if (!main) return { error: 'main is required' }
   const sheet = openOrCreateSheet_(FAV_SHEET, FAV_HDR)
   appendRow_(sheet, FAV_HDR, {
     fav_id: Utilities.getUuid(), main, side: '', recipe: recipe || '',
     ingredients_json: JSON.stringify(ingredients || []), created_at: nowStr_(),
-    image_url: imageUrl || '', category: category === 'side' ? 'side' : 'main',
+    image_url: imageUrl || '', category: normalizeCandidateCategory_(category),
   })
   return { favorites: getFavorites() }
 }
@@ -510,7 +515,7 @@ function updateCandidate(favId, main, recipe, ingredients, category, imageUrl) {
       sheet.getRange(i + 1, mainIdx + 1).setValue(main)
       sheet.getRange(i + 1, recipeIdx + 1).setValue(recipe || '')
       sheet.getRange(i + 1, ingIdx + 1).setValue(JSON.stringify(ingredients || []))
-      sheet.getRange(i + 1, catIdx + 1).setValue(category === 'side' ? 'side' : 'main')
+      sheet.getRange(i + 1, catIdx + 1).setValue(normalizeCandidateCategory_(category))
       if (imageUrl) sheet.getRange(i + 1, imgIdx + 1).setValue(imageUrl)
       break
     }
@@ -866,8 +871,8 @@ function generateWeek(weekId) {
   const cheatDay  = getCheatDay()
   const dislikes  = getDislikedDishNames_()
   const candidates = getFavorites().filter(f => dislikes.indexOf(f.main) === -1)
-  const mainPool = shuffle_(candidates.filter(f => (f.category || 'main') !== 'side'))
-  const sidePool = shuffle_(candidates.filter(f => (f.category || 'main') === 'side'))
+  const mainPool = shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'main'))
+  const sidePool = shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'side'))
 
   const days = buildWeekDates_(weekId)
   const cheatIdx = DAY_LABELS.indexOf(cheatDay)

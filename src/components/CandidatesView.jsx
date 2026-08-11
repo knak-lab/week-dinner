@@ -27,8 +27,15 @@ function resizeImageToBase64_(file) {
   })
 }
 
+const CATEGORIES = [
+  { value: 'main', label: 'メイン' },
+  { value: 'side', label: '副菜' },
+  { value: 'sweets', label: 'お菓子' },
+  { value: 'makeahead', label: '作り置き' },
+]
+
 function candidateCategory_(f) {
-  return f.category === 'side' ? 'side' : 'main'
+  return CATEGORIES.some((c) => c.value === f.category) ? f.category : 'main'
 }
 
 function parseIngredientsJson_(json) {
@@ -76,8 +83,9 @@ function CandidateForm({ mode, initialValues, onSave, onCancel }) {
 
       <label className="manual-form__label">区分</label>
       <select value={category} onChange={(e) => setCategory(e.target.value)}>
-        <option value="main">主菜</option>
-        <option value="side">副菜</option>
+        {CATEGORIES.map((c) => (
+          <option key={c.value} value={c.value}>{c.label}</option>
+        ))}
       </select>
 
       <label className="manual-form__label">料理名</label>
@@ -218,8 +226,10 @@ export default function CandidatesView({ favorites, onExtract, onExtractText, on
 
   const q = search.trim().toLowerCase()
   const filtered = favorites.filter((f) => !q || f.main.toLowerCase().includes(q))
-  const mains = filtered.filter((f) => candidateCategory_(f) === 'main')
-  const sides = filtered.filter((f) => candidateCategory_(f) === 'side')
+  const byCategory = CATEGORIES.map((c) => ({
+    ...c,
+    items: filtered.filter((f) => candidateCategory_(f) === c.value),
+  }))
 
   return (
     <div className="candidates-view">
@@ -304,8 +314,9 @@ export default function CandidatesView({ favorites, onExtract, onExtractText, on
           placeholder="料理名で検索"
         />
 
-        <CandidateListSection title="主菜" items={mains} onEdit={openEdit} onRemove={onRemoveCandidate} />
-        <CandidateListSection title="副菜" items={sides} onEdit={openEdit} onRemove={onRemoveCandidate} />
+        {byCategory.map((c) => (
+          <CandidateListSection key={c.value} title={c.label} items={c.items} onEdit={openEdit} onRemove={onRemoveCandidate} />
+        ))}
       </section>
     </div>
   )
