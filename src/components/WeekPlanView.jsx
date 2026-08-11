@@ -112,10 +112,25 @@ function ManualDishModal({ dayLabel, onSave, onClose }) {
   )
 }
 
+function favoriteIngredientNames_(f) {
+  try {
+    const parsed = JSON.parse(f.ingredients_json || '[]')
+    return Array.isArray(parsed) ? parsed.map((ing) => ing.name || '').filter(Boolean) : []
+  } catch (e) {
+    return []
+  }
+}
+
 function FavoritePickerModal({ dayLabel, favorites, onSelect, onClose }) {
   const [search, setSearch] = useState('')
+  const [ingredientFilter, setIngredientFilter] = useState('')
   const q = search.trim().toLowerCase()
-  const filtered = favorites.filter((f) => !q || f.main.toLowerCase().includes(q))
+  const iq = ingredientFilter.trim().toLowerCase()
+  const filtered = favorites.filter((f) => {
+    if (q && !f.main.toLowerCase().includes(q)) return false
+    if (iq && !favoriteIngredientNames_(f).some((name) => name.toLowerCase().includes(iq))) return false
+    return true
+  })
 
   return (
     <div className="recipe-modal-backdrop" onClick={onClose}>
@@ -128,13 +143,22 @@ function FavoritePickerModal({ dayLabel, favorites, onSelect, onClose }) {
           <p className="empty-msg">お気に入りがまだありません。</p>
         ) : (
           <>
-            <input
-              type="search"
-              className="candidate-search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="料理名で検索"
-            />
+            <div className="favorite-picker__filters">
+              <input
+                type="search"
+                className="candidate-search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="料理名で検索"
+              />
+              <input
+                type="search"
+                className="candidate-search"
+                value={ingredientFilter}
+                onChange={(e) => setIngredientFilter(e.target.value)}
+                placeholder="食材で絞り込む（例：鶏むね肉）"
+              />
+            </div>
             {filtered.length === 0 ? (
               <p className="empty-msg">該当するお気に入りがありません。</p>
             ) : (

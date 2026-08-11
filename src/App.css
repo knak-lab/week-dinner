@@ -478,6 +478,13 @@ body {
   cursor: default;
 }
 
+.favorite-picker__filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
 .favorite-list {
   list-style: none;
   margin: 0;
