@@ -483,7 +483,7 @@ function removeFavoriteByMain_(main) {
 //  候補（スクショから登録・手動保存。お気に入りと同じシートを使う）
 // ─────────────────────────────────────────
 
-const CANDIDATE_CATEGORIES = ['main', 'side', 'sweets', 'makeahead']
+const CANDIDATE_CATEGORIES = ['main', 'side', 'soup', 'makeahead', 'seasoning', 'drink', 'sweets']
 function normalizeCandidateCategory_(category) {
   return CANDIDATE_CATEGORIES.indexOf(category) === -1 ? 'main' : category
 }

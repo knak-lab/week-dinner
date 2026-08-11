@@ -30,8 +30,11 @@ function resizeImageToBase64_(file) {
 const CATEGORIES = [
   { value: 'main', label: 'メイン' },
   { value: 'side', label: '副菜' },
-  { value: 'sweets', label: 'お菓子' },
+  { value: 'soup', label: 'スープ' },
   { value: 'makeahead', label: '作り置き' },
+  { value: 'seasoning', label: '調味料' },
+  { value: 'drink', label: '飲み物' },
+  { value: 'sweets', label: 'お菓子' },
 ]
 
 function candidateCategory_(f) {
