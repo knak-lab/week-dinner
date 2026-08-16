@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+
+const STOCK_CATEGORY_ORDER = ['肉', '野菜', '調味料', 'その他']
 
 export default function ShoppingListView({
   groups, checkedItems, loading, stock, stockLoading,
@@ -16,6 +18,12 @@ export default function ShoppingListView({
     setNewQty('')
   }
 
+  const stockByCategory = useMemo(() => {
+    return STOCK_CATEGORY_ORDER
+      .map((category) => ({ category, items: stock.filter((item) => item.category === category) }))
+      .filter((g) => g.items.length > 0)
+  }, [stock])
+
   return (
     <div className="shopping-view">
       <section>
@@ -27,33 +35,38 @@ export default function ShoppingListView({
         </div>
         {loading ? (
           <p className="empty-msg">読み込み中…</p>
-        ) : groups.length === 0 || groups.every((g) => g.items.length === 0) ? (
+        ) : groups.length === 0 || groups.every((g) => g.categories.every((c) => c.items.length === 0)) ? (
           <p className="empty-msg">この週の買い物リストはまだありません。献立を作ると自動生成されます。</p>
         ) : (
           <div className="shopping-groups">
-            {groups.filter((g) => g.items.length > 0).map((g) => (
+            {groups.filter((g) => g.categories.some((c) => c.items.length > 0)).map((g) => (
               <div key={g.label} className="shopping-group">
                 <h4 className="shopping-group__label">{g.label}</h4>
-                <ul className="shopping-group__items">
-                  {g.items.map((item) => {
-                    const key = `${g.label}__${item.ingredient_name}`
-                    const isChecked = checkedItems.has(key)
-                    return (
-                      <li key={key} className={isChecked ? 'shopping-item--checked' : ''}>
-                        <label className="shopping-item__label">
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            disabled={isChecked}
-                            onChange={() => onCheckItem(g.label, item)}
-                          />
-                          <span className="shopping-item__name">{item.ingredient_name}</span>
-                        </label>
-                        <span className="shopping-item__amount">{item.amount}</span>
-                      </li>
-                    )
-                  })}
-                </ul>
+                {g.categories.map((c) => (
+                  <div key={c.category} className="shopping-category">
+                    <h5 className="shopping-category__label">{c.category}</h5>
+                    <ul className="shopping-group__items">
+                      {c.items.map((item) => {
+                        const key = `${g.label}__${item.ingredient_name}`
+                        const isChecked = checkedItems.has(key)
+                        return (
+                          <li key={key} className={isChecked ? 'shopping-item--checked' : ''}>
+                            <label className="shopping-item__label">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                disabled={isChecked}
+                                onChange={() => onCheckItem(g.label, item)}
+                              />
+                              <span className="shopping-item__name">{item.ingredient_name}</span>
+                            </label>
+                            <span className="shopping-item__amount">{item.amount}</span>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </div>
+                ))}
               </div>
             ))}
           </div>
@@ -83,23 +96,30 @@ export default function ShoppingListView({
         ) : stock.length === 0 ? (
           <p className="empty-msg">手持ちの食材はまだありません。</p>
         ) : (
-          <ul className="stock-list">
-            {stock.map((item) => (
-              <li key={item.id} className="stock-item">
-                <label className="stock-item__label">
-                  <input type="checkbox" onChange={() => onRemoveStock(item.id)} />
-                  <span className="stock-item__name">{item.name}</span>
-                </label>
-                <input
-                  className="stock-item__qty"
-                  value={item.quantity}
-                  onChange={(e) => onQuantityChange(item.id, e.target.value)}
-                  onBlur={(e) => onQuantityCommit(item.id, e.target.value)}
-                  placeholder="数量"
-                />
-              </li>
+          <div className="stock-groups">
+            {stockByCategory.map((g) => (
+              <div key={g.category} className="stock-category">
+                <h5 className="shopping-category__label">{g.category}</h5>
+                <ul className="stock-list">
+                  {g.items.map((item) => (
+                    <li key={item.id} className="stock-item">
+                      <label className="stock-item__label">
+                        <input type="checkbox" onChange={() => onRemoveStock(item.id)} />
+                        <span className="stock-item__name">{item.name}</span>
+                      </label>
+                      <input
+                        className="stock-item__qty"
+                        value={item.quantity}
+                        onChange={(e) => onQuantityChange(item.id, e.target.value)}
+                        onBlur={(e) => onQuantityCommit(item.id, e.target.value)}
+                        placeholder="数量"
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </section>
     </div>

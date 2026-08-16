@@ -27,6 +27,47 @@ const DAY_LABELS = ['月', '火', '水', '木', '金', '土', '日']
 const SHOPPING_GROUPS = [['月', '火', '水'], ['木', '金', '土'], ['日']]
 
 // ─────────────────────────────────────────
+//  食材カテゴリ分類（買い物リスト・手持ち食材の「肉・野菜・調味料」振り分け）
+// ─────────────────────────────────────────
+
+const INGREDIENT_CATEGORY_ORDER = ['肉', '野菜', '調味料', 'その他']
+const INGREDIENT_CATEGORY_KEYWORDS = {
+  '肉': [
+    '鶏', '豚', '牛', 'ひき肉', '挽き肉', 'ベーコン', 'ハム', 'ソーセージ', 'ウインナー',
+    '手羽', '肉', 'ミンチ',
+  ],
+  '野菜': [
+    '玉ねぎ', 'たまねぎ', 'にんじん', '人参', 'じゃがいも', 'ジャガイモ', 'さつまいも', 'キャベツ',
+    '白菜', '大根', 'ほうれん草', '小松菜', 'ピーマン', 'パプリカ', 'きゅうり', 'トマト', 'なす',
+    'ナス', 'かぼちゃ', 'カボチャ', 'ねぎ', 'ネギ', 'もやし', 'きのこ', 'しめじ', 'えのき',
+    'しいたけ', 'シイタケ', '舞茸', 'マイタケ', 'エリンギ', 'ごぼう', 'れんこん', 'レンコン',
+    'ブロッコリー', 'アスパラ', 'レタス', 'セロリ', 'にんにく', 'ニンニク', '生姜', 'しょうが',
+    'ショウガ', 'オクラ', 'ズッキーニ', 'アボカド', '豆苗', '水菜', 'かぶ', 'カブ', '枝豆',
+    'とうもろこし', 'コーン', 'チンゲン菜', 'パセリ', '三つ葉', 'みょうが', '大葉', 'しそ', 'ゴーヤ',
+  ],
+  '調味料': [
+    '醤油', 'しょうゆ', '味噌', 'みそ', '砂糖', '塩', 'こしょう', '胡椒', '酢', 'みりん',
+    '料理酒', '酒', '油', 'だし', '出汁', 'ガラスープ', 'スープの素', 'コンソメ', 'ケチャップ',
+    'マヨネーズ', 'ソース', 'たれ', 'ポン酢', 'めんつゆ', 'ラー油', '豆板醤', 'オイスターソース',
+    'カレー粉', '片栗粉', '小麦粉', 'パン粉', 'バター', 'はちみつ', 'ハチミツ', 'ごま', 'ゴマ',
+    '唐辛子', 'わさび', 'からし', '七味', '山椒', 'クミン', '塩こしょう', 'にんにくチューブ',
+    '生姜チューブ',
+  ],
+}
+
+// 「鶏ガラスープの素」のような複合語は調味料の判定を優先する
+const INGREDIENT_CATEGORY_PRIORITY = ['調味料', '肉', '野菜']
+
+function categorizeIngredient_(name) {
+  const n = String(name || '')
+  for (let i = 0; i < INGREDIENT_CATEGORY_PRIORITY.length; i++) {
+    const cat = INGREDIENT_CATEGORY_PRIORITY[i]
+    if (INGREDIENT_CATEGORY_KEYWORDS[cat].some(k => n.indexOf(k) !== -1)) return cat
+  }
+  return 'その他'
+}
+
+// ─────────────────────────────────────────
 //  ルーティング
 // ─────────────────────────────────────────
 
@@ -826,6 +867,7 @@ function setCheatDay(cheatDay) {
 
 function getStockIngredients() {
   return sheetToObjs_(openOrCreateSheet_(STOCK_SHEET, STOCK_HDR))
+    .map(r => ({ ...r, category: categorizeIngredient_(r.name) }))
 }
 
 function mergeQuantity_(existingQty, addedQty) {
@@ -968,10 +1010,19 @@ function getShoppingList(weekId) {
           })
       })
     })
+    const itemsByCategory = {}
+    Object.entries(itemMap).forEach(([ingredient_name, amounts]) => {
+      const cat = categorizeIngredient_(ingredient_name)
+      if (!itemsByCategory[cat]) itemsByCategory[cat] = []
+      itemsByCategory[cat].push({ ingredient_name, amount: sumAmounts_(amounts) })
+    })
+    const categories = INGREDIENT_CATEGORY_ORDER
+      .filter(cat => itemsByCategory[cat] && itemsByCategory[cat].length > 0)
+      .map(cat => ({ category: cat, items: itemsByCategory[cat] }))
     return {
       label: days.join('・'),
       days,
-      items: Object.entries(itemMap).map(([ingredient_name, amounts]) => ({ ingredient_name, amount: sumAmounts_(amounts) })),
+      categories,
     }
   })
 

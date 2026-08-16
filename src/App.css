@@ -996,6 +996,21 @@ body {
   color: var(--accent-dark);
 }
 
+.shopping-category {
+  margin-bottom: 10px;
+}
+
+.shopping-category:last-child {
+  margin-bottom: 0;
+}
+
+.shopping-category__label {
+  margin: 0 0 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-sub);
+}
+
 .shopping-group__items {
   list-style: none;
   margin: 0;
@@ -1056,6 +1071,12 @@ body {
   border-radius: 6px;
   padding: 8px 12px;
   cursor: pointer;
+}
+
+.stock-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .stock-list {
