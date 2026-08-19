@@ -205,9 +205,19 @@ export default function App() {
 
   const handleCheckShoppingItem = (groupLabel, item) => {
     const key = `${groupLabel}__${item.ingredient_name}`
-    setCheckedShoppingItems((prev) => new Set(prev).add(key))
-    handleAddStock(item.ingredient_name, item.amount)
-    gasApi.checkShoppingItem(weekId, groupLabel, item.ingredient_name).catch((e) => setError(e.message))
+    const wasChecked = checkedShoppingItems.has(key)
+    if (wasChecked) {
+      setCheckedShoppingItems((prev) => {
+        const next = new Set(prev)
+        next.delete(key)
+        return next
+      })
+      gasApi.uncheckShoppingItem(weekId, groupLabel, item.ingredient_name).catch((e) => setError(e.message))
+    } else {
+      setCheckedShoppingItems((prev) => new Set(prev).add(key))
+      handleAddStock(item.ingredient_name, item.amount)
+      gasApi.checkShoppingItem(weekId, groupLabel, item.ingredient_name).catch((e) => setError(e.message))
+    }
   }
 
   const handleStockQuantityChange = (id, quantity) => {

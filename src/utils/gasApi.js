@@ -91,6 +91,8 @@ export const gasApi = {
   removeStockIngredient:         (id) => post({ action: 'removeStockIngredient', id }),
   checkShoppingItem: (weekId, groupLabel, ingredientName) =>
     post({ action: 'checkShoppingItem', week_id: weekId, group_label: groupLabel, ingredient_name: ingredientName }),
+  uncheckShoppingItem: (weekId, groupLabel, ingredientName) =>
+    post({ action: 'uncheckShoppingItem', week_id: weekId, group_label: groupLabel, ingredient_name: ingredientName }),
   extractDishFromImage: (images) =>
     post({ action: 'extractDishFromImage', images: images.map((img) => ({ base64: img.base64, mime_type: img.mimeType })) }),
   extractDishFromText: (text) => post({ action: 'extractDishFromText', text }),

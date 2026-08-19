@@ -114,6 +114,7 @@ function doPost(e) {
       case 'updateStockIngredientQuantity':  return ok(updateStockIngredientQuantity(body.id, body.quantity))
       case 'removeStockIngredient':          return ok(removeStockIngredient(body.id))
       case 'checkShoppingItem':              return ok(checkShoppingItem(body.week_id, body.group_label, body.ingredient_name))
+      case 'uncheckShoppingItem':            return ok(uncheckShoppingItem(body.week_id, body.group_label, body.ingredient_name))
       case 'extractDishFromImage':           return ok(extractDishFromImage(body.images))
       case 'extractDishFromText':            return ok(extractDishFromText(body.text))
       case 'addCandidate':                   return ok(addCandidate(body.main, body.recipe, body.ingredients, body.category, body.image_base64, body.image_mime_type))
@@ -1045,6 +1046,21 @@ function checkShoppingItem(weekId, groupLabel, ingredientName) {
   const already = sheetToObjs_(sheet).some(r => r.week_id === weekId && r.group_label === groupLabel && r.ingredient_name === ingredientName)
   if (!already) {
     appendRow_(sheet, CHECKED_HDR, { week_id: weekId, group_label: groupLabel, ingredient_name: ingredientName, checked_at: nowStr_() })
+  }
+  return { saved: true, checked: getCheckedShoppingItems_(weekId) }
+}
+
+function uncheckShoppingItem(weekId, groupLabel, ingredientName) {
+  if (!weekId || !groupLabel || !ingredientName) return { error: 'week_id, group_label and ingredient_name are required' }
+  const sheet = openOrCreateSheet_(CHECKED_SHEET, CHECKED_HDR)
+  const data = sheet.getDataRange().getValues()
+  const weekIdx = CHECKED_HDR.indexOf('week_id')
+  const groupIdx = CHECKED_HDR.indexOf('group_label')
+  const nameIdx = CHECKED_HDR.indexOf('ingredient_name')
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (cellToStr(data[i][weekIdx]) === weekId && cellToStr(data[i][groupIdx]) === groupLabel && cellToStr(data[i][nameIdx]) === ingredientName) {
+      sheet.deleteRow(i + 1)
+    }
   }
   return { saved: true, checked: getCheckedShoppingItems_(weekId) }
 }

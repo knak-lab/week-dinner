@@ -55,7 +55,6 @@ export default function ShoppingListView({
                               <input
                                 type="checkbox"
                                 checked={isChecked}
-                                disabled={isChecked}
                                 onChange={() => onCheckItem(g.label, item)}
                               />
                               <span className="shopping-item__name">{item.ingredient_name}</span>
