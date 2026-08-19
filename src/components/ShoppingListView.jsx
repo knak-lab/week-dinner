@@ -8,6 +8,24 @@ export default function ShoppingListView({
 }) {
   const [newName, setNewName] = useState('')
   const [newQty, setNewQty] = useState('')
+  const [closedGroups, setClosedGroups] = useState(() => new Set())
+  const [closedCategories, setClosedCategories] = useState(() => new Set())
+
+  const toggleGroup = (label) => {
+    setClosedGroups((prev) => {
+      const next = new Set(prev)
+      next.has(label) ? next.delete(label) : next.add(label)
+      return next
+    })
+  }
+
+  const toggleCategory = (key) => {
+    setClosedCategories((prev) => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
 
   const submitAdd = (e) => {
     e.preventDefault()
@@ -39,35 +57,60 @@ export default function ShoppingListView({
           <p className="empty-msg">この週の買い物リストはまだありません。献立を作ると自動生成されます。</p>
         ) : (
           <div className="shopping-groups">
-            {groups.filter((g) => g.categories.some((c) => c.items.length > 0)).map((g) => (
-              <div key={g.label} className="shopping-group">
-                <h4 className="shopping-group__label">{g.label}</h4>
-                {g.categories.map((c) => (
-                  <div key={c.category} className="shopping-category">
-                    <h5 className="shopping-category__label">{c.category}</h5>
-                    <ul className="shopping-group__items">
-                      {c.items.map((item) => {
-                        const key = `${g.label}__${item.ingredient_name}`
-                        const isChecked = checkedItems.has(key)
-                        return (
-                          <li key={key} className={isChecked ? 'shopping-item--checked' : ''}>
-                            <label className="shopping-item__label">
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={() => onCheckItem(g.label, item)}
-                              />
-                              <span className="shopping-item__name">{item.ingredient_name}</span>
-                            </label>
-                            <span className="shopping-item__amount">{item.amount}</span>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            ))}
+            {groups.filter((g) => g.categories.some((c) => c.items.length > 0)).map((g) => {
+              const groupOpen = !closedGroups.has(g.label)
+              return (
+                <div key={g.label} className="shopping-group">
+                  <button
+                    type="button"
+                    className="shopping-group__header"
+                    onClick={() => toggleGroup(g.label)}
+                    aria-expanded={groupOpen}
+                  >
+                    <span className={`shopping-caret ${groupOpen ? 'shopping-caret--open' : ''}`}>▸</span>
+                    <h4 className="shopping-group__label">{g.label}</h4>
+                  </button>
+                  {groupOpen && g.categories.map((c) => {
+                    const catKey = `${g.label}__${c.category}`
+                    const catOpen = !closedCategories.has(catKey)
+                    return (
+                      <div key={c.category} className="shopping-category">
+                        <button
+                          type="button"
+                          className="shopping-category__header"
+                          onClick={() => toggleCategory(catKey)}
+                          aria-expanded={catOpen}
+                        >
+                          <span className={`shopping-caret ${catOpen ? 'shopping-caret--open' : ''}`}>▸</span>
+                          <h5 className="shopping-category__label">{c.category}</h5>
+                        </button>
+                        {catOpen && (
+                          <ul className="shopping-group__items">
+                            {c.items.map((item) => {
+                              const key = `${g.label}__${item.ingredient_name}`
+                              const isChecked = checkedItems.has(key)
+                              return (
+                                <li key={key} className={isChecked ? 'shopping-item--checked' : ''}>
+                                  <label className="shopping-item__label">
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => onCheckItem(g.label, item)}
+                                    />
+                                    <span className="shopping-item__name">{item.ingredient_name}</span>
+                                  </label>
+                                  <span className="shopping-item__amount">{item.amount}</span>
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
           </div>
         )}
       </section>
