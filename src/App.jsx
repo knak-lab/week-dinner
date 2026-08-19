@@ -203,6 +203,15 @@ export default function App() {
     }
   }
 
+  const handleSubtractStock = async (name, quantity) => {
+    try {
+      const res = await gasApi.subtractStockIngredient(name, quantity)
+      setStock(res.ingredients || [])
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
   const handleCheckShoppingItem = (groupLabel, item) => {
     const key = `${groupLabel}__${item.ingredient_name}`
     const wasChecked = checkedShoppingItems.has(key)
@@ -212,6 +221,7 @@ export default function App() {
         next.delete(key)
         return next
       })
+      handleSubtractStock(item.ingredient_name, item.amount)
       gasApi.uncheckShoppingItem(weekId, groupLabel, item.ingredient_name).catch((e) => setError(e.message))
     } else {
       setCheckedShoppingItems((prev) => new Set(prev).add(key))

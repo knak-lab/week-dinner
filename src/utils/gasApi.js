@@ -87,6 +87,7 @@ export const gasApi = {
   moveDish:             (dishId, targetDayLabel) =>
     post({ action: 'moveDish', dish_id: dishId, target_day_label: targetDayLabel }),
   addStockIngredient:            (name, quantity) => post({ action: 'addStockIngredient', name, quantity }),
+  subtractStockIngredient:       (name, quantity) => post({ action: 'subtractStockIngredient', name, quantity }),
   updateStockIngredientQuantity: (id, quantity) => post({ action: 'updateStockIngredientQuantity', id, quantity }),
   removeStockIngredient:         (id) => post({ action: 'removeStockIngredient', id }),
   checkShoppingItem: (weekId, groupLabel, ingredientName) =>

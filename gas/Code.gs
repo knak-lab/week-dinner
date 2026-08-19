@@ -111,6 +111,7 @@ function doPost(e) {
       case 'addDishFromFavorite':  return ok(addDishFromFavorite(body.week_id, body.day_label, body.fav_id, body.kind))
       case 'moveDish':              return ok(moveDish(body.dish_id, body.target_day_label))
       case 'addStockIngredient':             return ok(addStockIngredient(body.name, body.quantity))
+      case 'subtractStockIngredient':        return ok(subtractStockIngredient(body.name, body.quantity))
       case 'updateStockIngredientQuantity':  return ok(updateStockIngredientQuantity(body.id, body.quantity))
       case 'removeStockIngredient':          return ok(removeStockIngredient(body.id))
       case 'checkShoppingItem':              return ok(checkShoppingItem(body.week_id, body.group_label, body.ingredient_name))
@@ -885,6 +886,18 @@ function addStockIngredient(name, quantity) {
   return { saved: true, id, ingredients: getStockIngredients() }
 }
 
+// 買い物リストのチェックを外したときに、チェック時に加算した分だけ手持ちの食材から差し引く。
+// 同名の在庫が見つからない、または単位が一致せず差し引けない場合は何もしない（マイナス表示は作らない）。
+function subtractStockIngredient(name, quantity) {
+  if (!name) return { error: 'name is required' }
+  const sheet = openOrCreateSheet_(STOCK_SHEET, STOCK_HDR)
+  const existing = sheetToObjs_(sheet).find(r => r.name === name)
+  if (!existing) return { saved: true, ingredients: getStockIngredients() }
+  const newQty = subtractAmount_(existing.quantity, quantity)
+  if (!newQty) return removeStockIngredient(existing.id)
+  return updateStockIngredientQuantity(existing.id, newQty)
+}
+
 function updateStockIngredientQuantity(id, quantity) {
   if (!id) return { error: 'id is required' }
   const sheet = openOrCreateSheet_(STOCK_SHEET, STOCK_HDR)
@@ -969,6 +982,32 @@ function sumAmounts_(amounts) {
     const g = groups[k]
     return g.raw !== undefined ? g.raw : formatAmount_(g.value, g.unit)
   }).join(' + ')
+}
+
+// sumAmounts_で結合された「300g + 少々」のような文字列から、指定の分量を1つだけ差し引く。
+// 単位が一致する数値部分があれば減算し（0以下になれば取り除く）、数値化できない場合は
+// 完全一致する文字列を1つだけ取り除く。どちらにも該当しなければ何もしない。
+function subtractAmount_(existingQty, removeQty) {
+  if (!existingQty) return ''
+  if (!removeQty) return existingQty
+  const removeParsed = parseAmount_(removeQty)
+  const parts = String(existingQty).split(' + ').map(s => s.trim()).filter(Boolean)
+  let removed = false
+  const result = []
+  parts.forEach(part => {
+    if (removed) { result.push(part); return }
+    const partParsed = parseAmount_(part)
+    if (removeParsed && partParsed && partParsed.unit === removeParsed.unit) {
+      removed = true
+      const newValue = partParsed.value - removeParsed.value
+      if (newValue > 0.001) result.push(formatAmount_(newValue, partParsed.unit))
+    } else if (!removeParsed && part === String(removeQty).trim()) {
+      removed = true
+    } else {
+      result.push(part)
+    }
+  })
+  return result.join(' + ')
 }
 
 // ─────────────────────────────────────────
