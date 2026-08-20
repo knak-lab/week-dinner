@@ -8,24 +8,22 @@ export default function ShoppingListView({
 }) {
   const [newName, setNewName] = useState('')
   const [newQty, setNewQty] = useState('')
-  const [closedGroups, setClosedGroups] = useState(() => new Set())
-  const [closedCategories, setClosedCategories] = useState(() => new Set())
+  // 開いている項目のキーだけを持つ（未登録＝デフォルトで閉じている状態）
+  const [openGroups, setOpenGroups] = useState(() => new Set())
+  const [openCategories, setOpenCategories] = useState(() => new Set())
+  const [openStockCategories, setOpenStockCategories] = useState(() => new Set())
 
-  const toggleGroup = (label) => {
-    setClosedGroups((prev) => {
-      const next = new Set(prev)
-      next.has(label) ? next.delete(label) : next.add(label)
-      return next
-    })
-  }
-
-  const toggleCategory = (key) => {
-    setClosedCategories((prev) => {
+  const toggleInSet = (setter) => (key) => {
+    setter((prev) => {
       const next = new Set(prev)
       next.has(key) ? next.delete(key) : next.add(key)
       return next
     })
   }
+
+  const toggleGroup = toggleInSet(setOpenGroups)
+  const toggleCategory = toggleInSet(setOpenCategories)
+  const toggleStockCategory = toggleInSet(setOpenStockCategories)
 
   const submitAdd = (e) => {
     e.preventDefault()
@@ -58,7 +56,7 @@ export default function ShoppingListView({
         ) : (
           <div className="shopping-groups">
             {groups.filter((g) => g.categories.some((c) => c.items.length > 0)).map((g) => {
-              const groupOpen = !closedGroups.has(g.label)
+              const groupOpen = openGroups.has(g.label)
               return (
                 <div key={g.label} className="shopping-group">
                   <button
@@ -72,7 +70,7 @@ export default function ShoppingListView({
                   </button>
                   {groupOpen && g.categories.map((c) => {
                     const catKey = `${g.label}__${c.category}`
-                    const catOpen = !closedCategories.has(catKey)
+                    const catOpen = openCategories.has(catKey)
                     return (
                       <div key={c.category} className="shopping-category">
                         <button
@@ -139,28 +137,41 @@ export default function ShoppingListView({
           <p className="empty-msg">手持ちの食材はまだありません。</p>
         ) : (
           <div className="stock-groups">
-            {stockByCategory.map((g) => (
-              <div key={g.category} className="stock-category">
-                <h5 className="shopping-category__label">{g.category}</h5>
-                <ul className="stock-list">
-                  {g.items.map((item) => (
-                    <li key={item.id} className="stock-item">
-                      <label className="stock-item__label">
-                        <input type="checkbox" onChange={() => onRemoveStock(item.id)} />
-                        <span className="stock-item__name">{item.name}</span>
-                      </label>
-                      <input
-                        className="stock-item__qty"
-                        value={item.quantity}
-                        onChange={(e) => onQuantityChange(item.id, e.target.value)}
-                        onBlur={(e) => onQuantityCommit(item.id, e.target.value)}
-                        placeholder="数量"
-                      />
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+            {stockByCategory.map((g) => {
+              const catOpen = openStockCategories.has(g.category)
+              return (
+                <div key={g.category} className="stock-category">
+                  <button
+                    type="button"
+                    className="shopping-category__header"
+                    onClick={() => toggleStockCategory(g.category)}
+                    aria-expanded={catOpen}
+                  >
+                    <span className={`shopping-caret ${catOpen ? 'shopping-caret--open' : ''}`}>▸</span>
+                    <h5 className="shopping-category__label">{g.category}</h5>
+                  </button>
+                  {catOpen && (
+                    <ul className="stock-list">
+                      {g.items.map((item) => (
+                        <li key={item.id} className="stock-item">
+                          <label className="stock-item__label">
+                            <input type="checkbox" onChange={() => onRemoveStock(item.id)} />
+                            <span className="stock-item__name">{item.name}</span>
+                          </label>
+                          <input
+                            className="stock-item__qty"
+                            value={item.quantity}
+                            onChange={(e) => onQuantityChange(item.id, e.target.value)}
+                            onBlur={(e) => onQuantityCommit(item.id, e.target.value)}
+                            placeholder="数量"
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
       </section>
