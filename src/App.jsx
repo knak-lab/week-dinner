@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { gasApi, isGasReady } from './utils/gasApi'
+import { readCache, writeCache } from './utils/localCache'
 import { currentWeekId, shiftWeekId } from './utils/weekUtils'
 import WeekPlanView from './components/WeekPlanView'
 import ShoppingListView from './components/ShoppingListView'
@@ -9,6 +10,24 @@ import LoadingOverlay from './components/LoadingOverlay'
 
 const REVEAL_DURATION_MS = 2500
 
+const EMPTY_WEEK = { weekPlan: [], ingredients: [], styleTags: [], preferences: [], favorites: [], cheatDay: '' }
+
+const weekCacheKey     = (id) => `week:${id}`
+const shoppingCacheKey = (id) => `shopping:${id}`
+const STOCK_CACHE_KEY  = 'stock'
+
+// GASのレスポンスからアプリが使うフィールドだけを取り出す（ok等のメタをキャッシュに残さない）
+function pickWeek(res) {
+  return {
+    weekPlan:    res.weekPlan    || [],
+    ingredients: res.ingredients || [],
+    styleTags:   res.styleTags   || [],
+    preferences: res.preferences || [],
+    favorites:   res.favorites   || [],
+    cheatDay:    res.cheatDay    || '',
+  }
+}
+
 const TABS = [
   { id: 'plan', label: '献立' },
   { id: 'shopping', label: '買い物・食材' },
@@ -17,12 +36,13 @@ const TABS = [
 ]
 
 export default function App() {
-  const [weekId, setWeekId] = useState(currentWeekId())
+  const [weekId, setWeekId] = useState(currentWeekId)
   const [tab, setTab] = useState('plan')
-  const [weekData, setWeekData] = useState({ weekPlan: [], ingredients: [], styleTags: [], preferences: [], favorites: [], cheatDay: '' })
+  // 初回描画は前回のキャッシュから。ネットワークを待たずに画面が出る。
+  const [weekData, setWeekData] = useState(() => readCache(weekCacheKey(currentWeekId())) || EMPTY_WEEK)
   const [shoppingGroups, setShoppingGroups] = useState([])
   const [checkedShoppingItems, setCheckedShoppingItems] = useState(new Set())
-  const [stock, setStock] = useState([])
+  const [stock, setStock] = useState(() => readCache(STOCK_CACHE_KEY) || [])
   const [weekLoading, setWeekLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [showReveal, setShowReveal] = useState(false)
@@ -31,26 +51,65 @@ export default function App() {
   const [stockLoading, setStockLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // 週を切り替えたとき、前の週のレスポンスが後から届いて上書きするのを防ぐ
+  const activeWeekIdRef = useRef(weekId)
+
+  const loadStock = useCallback(async () => {
+    setStockLoading(true)
+    try {
+      const res = await gasApi.getStockIngredients()
+      const ingredients = res.ingredients || []
+      setStock(ingredients)
+      writeCache(STOCK_CACHE_KEY, ingredients)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setStockLoading(false)
+    }
+  }, [])
+
   const loadWeek = useCallback(async (id) => {
+    activeWeekIdRef.current = id
+    // キャッシュがあれば先に描画してしまい、通信は裏で走らせる
+    setWeekData(readCache(weekCacheKey(id)) || EMPTY_WEEK)
     setWeekLoading(true)
     setError('')
     try {
       const res = await gasApi.getWeek(id)
-      setWeekData(res)
+      if (activeWeekIdRef.current !== id) return
+      const next = pickWeek(res)
+      setWeekData(next)
+      writeCache(weekCacheKey(id), next)
+      if (Array.isArray(res.stock)) {
+        // 新しいGASは手持ち食材も同梱で返すため、起動時のリクエストは1本で済む
+        setStock(res.stock)
+        writeCache(STOCK_CACHE_KEY, res.stock)
+      } else {
+        // GASが未デプロイ（旧版）のときのフォールバック
+        loadStock()
+      }
     } catch (e) {
       setError(e.message)
     } finally {
-      setWeekLoading(false)
+      if (activeWeekIdRef.current === id) setWeekLoading(false)
     }
-  }, [])
+  }, [loadStock])
 
   const loadShoppingList = useCallback(async (id) => {
+    const cached = readCache(shoppingCacheKey(id))
+    if (cached) {
+      setShoppingGroups(cached.groups || [])
+      setCheckedShoppingItems(new Set(cached.checked || []))
+    }
     setShoppingLoading(true)
     try {
       const res = await gasApi.getShoppingList(id)
-      setShoppingGroups(res.groups || [])
-      setCheckedShoppingItems(new Set(res.checked || []))
+      const groups = res.groups || []
+      const checked = res.checked || []
+      setShoppingGroups(groups)
+      setCheckedShoppingItems(new Set(checked))
       setLoadedShoppingWeekId(id)
+      writeCache(shoppingCacheKey(id), { groups, checked })
     } catch (e) {
       setError(e.message)
     } finally {
@@ -69,29 +128,28 @@ export default function App() {
     loadShoppingList(weekId)
   }, [tab, weekId, loadedShoppingWeekId, loadShoppingList])
 
-  const loadStock = useCallback(async () => {
-    setStockLoading(true)
-    try {
-      const res = await gasApi.getStockIngredients()
-      setStock(res.ingredients || [])
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setStockLoading(false)
-    }
-  }, [])
+  // 楽観更新もレスポンス反映も、キャッシュへ書き戻して次回起動時に最新が出るようにする
+  const setAndCacheWeek = (res) => {
+    const next = pickWeek(res)
+    setWeekData(next)
+    writeCache(weekCacheKey(weekId), next)
+    return next
+  }
 
-  useEffect(() => {
-    if (!isGasReady()) return
-    loadStock()
-  }, [loadStock])
+  const updateAndCacheWeek = (updater) => {
+    setWeekData((prev) => {
+      const next = updater(prev)
+      writeCache(weekCacheKey(weekId), next)
+      return next
+    })
+  }
 
   const handleGenerate = async () => {
     setGenerating(true)
     setError('')
     try {
       const res = await gasApi.generateWeek(weekId)
-      setWeekData(res)
+      setAndCacheWeek(res)
       setLoadedShoppingWeekId(null)
       setGenerating(false)
       setShowReveal(true)
@@ -105,7 +163,7 @@ export default function App() {
   const handleShiftWeek = (delta) => setWeekId((id) => shiftWeekId(id, delta))
 
   const handleChooseDish = async (dayLabel, dishId) => {
-    setWeekData((prev) => ({
+    updateAndCacheWeek((prev) => ({
       ...prev,
       weekPlan: prev.weekPlan.map((d) => {
         if (d.day_label !== dayLabel) return d
@@ -134,13 +192,13 @@ export default function App() {
       .filter((ing) => ing.dish_id === dish.dish_id)
       .map((ing) => ({ name: ing.ingredient_name, amount: ing.amount }))
 
-    setWeekData((prev) => ({
+    updateAndCacheWeek((prev) => ({
       ...prev,
       preferences: [...prev.preferences, { dish_name: dish.name, preference, week_id: weekId, day_label: dayLabel, dish_id: dish.dish_id }],
     }))
     try {
       const res = await gasApi.setPreference(dish.name, preference, weekId, dayLabel, dish.dish_id, dish.kind, dish.recipe, dishIngredients)
-      setWeekData((prev) => ({ ...prev, favorites: res.favorites }))
+      updateAndCacheWeek((prev) => ({ ...prev, favorites: res.favorites }))
     } catch (e) {
       setError(e.message)
     }
@@ -149,7 +207,7 @@ export default function App() {
   const handleAddDish = async (dayLabel, kind, payload) => {
     try {
       const res = await gasApi.addDish(weekId, dayLabel, kind, payload.name, payload.recipe, payload.ingredients)
-      setWeekData(res)
+      setAndCacheWeek(res)
       setLoadedShoppingWeekId(null)
     } catch (e) {
       setError(e.message)
@@ -159,7 +217,7 @@ export default function App() {
   const handleAddDishFromFavorite = async (dayLabel, kind, favId) => {
     try {
       const res = await gasApi.addDishFromFavorite(weekId, dayLabel, favId, kind)
-      setWeekData(res)
+      setAndCacheWeek(res)
       setLoadedShoppingWeekId(null)
     } catch (e) {
       setError(e.message)
@@ -169,7 +227,7 @@ export default function App() {
   const handleMoveDish = async (dishId, targetDayLabel) => {
     try {
       const res = await gasApi.moveDish(dishId, targetDayLabel)
-      setWeekData(res)
+      setAndCacheWeek(res)
       setLoadedShoppingWeekId(null)
     } catch (e) {
       setError(e.message)
@@ -252,7 +310,7 @@ export default function App() {
   }
 
   const handleSetCheatDay = async (cheatDay) => {
-    setWeekData((prev) => ({ ...prev, cheatDay }))
+    updateAndCacheWeek((prev) => ({ ...prev, cheatDay }))
     try {
       await gasApi.setCheatDay(cheatDay)
     } catch (e) {
@@ -281,7 +339,7 @@ export default function App() {
   const handleAddCandidate = async (main, recipe, ingredients, category, thumbnail) => {
     try {
       const res = await gasApi.addCandidate(main, recipe, ingredients, category, thumbnail)
-      setWeekData((prev) => ({ ...prev, favorites: res.favorites }))
+      updateAndCacheWeek((prev) => ({ ...prev, favorites: res.favorites }))
     } catch (e) {
       setError(e.message)
       throw e
@@ -291,7 +349,7 @@ export default function App() {
   const handleUpdateCandidate = async (favId, main, recipe, ingredients, category, thumbnail, removeImage) => {
     try {
       const res = await gasApi.updateCandidate(favId, main, recipe, ingredients, category, thumbnail, removeImage)
-      setWeekData((prev) => ({ ...prev, favorites: res.favorites }))
+      updateAndCacheWeek((prev) => ({ ...prev, favorites: res.favorites }))
     } catch (e) {
       setError(e.message)
       throw e
@@ -301,21 +359,27 @@ export default function App() {
   const handleRemoveCandidate = async (favId) => {
     try {
       const res = await gasApi.removeCandidate(favId)
-      setWeekData((prev) => ({ ...prev, favorites: res.favorites }))
+      updateAndCacheWeek((prev) => ({ ...prev, favorites: res.favorites }))
     } catch (e) {
       setError(e.message)
     }
   }
 
-  const overlayPhase = showReveal ? 'reveal' : generating ? 'generating' : weekLoading ? 'loading' : null
+  // キャッシュ済みの献立が既に出ているときは全画面オーバーレイで隠さず、控えめな「更新中」表示にする
+  const hasWeekContent = weekData.weekPlan.length > 0
+  const blockingWeekLoad = weekLoading && !hasWeekContent
+  const refreshing = (weekLoading && hasWeekContent) || (shoppingLoading && shoppingGroups.length > 0)
+
+  const overlayPhase = showReveal ? 'reveal' : generating ? 'generating' : blockingWeekLoad ? 'loading' : null
 
   return (
     <div className="app">
       <LoadingOverlay phase={overlayPhase} />
 
       <header className="app-header">
-        <img src={`${import.meta.env.BASE_URL}icon-512.png`} alt="" className="app-header__icon" />
+        <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" className="app-header__icon" width="72" height="72" />
         <h1>料理の鉄人</h1>
+        {refreshing && <span className="refresh-chip" role="status">更新中…</span>}
       </header>
 
       {!isGasReady() && (
@@ -344,7 +408,7 @@ export default function App() {
             preferences={weekData.preferences}
             ingredients={weekData.ingredients}
             favorites={weekData.favorites}
-            loading={weekLoading || generating}
+            loading={blockingWeekLoad || generating}
             generating={generating}
             onGenerate={handleGenerate}
             onShiftWeek={handleShiftWeek}
@@ -359,7 +423,7 @@ export default function App() {
           <ShoppingListView
             groups={shoppingGroups}
             checkedItems={checkedShoppingItems}
-            loading={shoppingLoading}
+            loading={shoppingLoading && shoppingGroups.length === 0}
             stock={stock}
             stockLoading={stockLoading}
             onCheckItem={handleCheckShoppingItem}

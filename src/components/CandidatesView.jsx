@@ -358,10 +358,6 @@ export default function CandidatesView({ favorites, onExtract, onExtractText, on
         {extracted && !editing && (
           <CandidateForm mode="add" initialValues={extracted} onSave={handleSaveNew} onCancel={resetUpload} />
         )}
-
-        {editing && (
-          <CandidateForm mode="edit" initialValues={editing} onSave={handleSaveEdit} onCancel={() => setEditing(null)} />
-        )}
       </section>
 
       <section className="candidates-section">
@@ -378,6 +374,24 @@ export default function CandidatesView({ favorites, onExtract, onExtractText, on
           <CandidateListSection key={c.value} title={c.label} items={c.items} onEdit={openEdit} onRemove={onRemoveCandidate} />
         ))}
       </section>
+
+      {editing && (
+        <div className="recipe-modal-backdrop" onClick={() => setEditing(null)}>
+          <div className="recipe-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="recipe-modal__header">
+              <h3 className="recipe-modal__title">候補を編集</h3>
+              <button className="recipe-modal__close" onClick={() => setEditing(null)} aria-label="閉じる">×</button>
+            </div>
+            <CandidateForm
+              key={editing.fav_id}
+              mode="edit"
+              initialValues={editing}
+              onSave={handleSaveEdit}
+              onCancel={() => setEditing(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -42,6 +42,19 @@ body {
   color: var(--accent-dark);
 }
 
+/* キャッシュ表示中に裏で更新が走っていることを、画面を隠さずに伝える */
+.refresh-chip {
+  margin-left: auto;
+  align-self: center;
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  color: var(--text-sub);
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 999px;
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+
 .empty-msg {
   color: var(--text-sub);
   font-size: 0.9rem;

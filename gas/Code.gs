@@ -71,6 +71,19 @@ function categorizeIngredient_(name) {
 //  ルーティング
 // ─────────────────────────────────────────
 
+const MIGRATION_CACHE_KEY = 'migrations_done_v1'
+const MIGRATION_CACHE_TTL_SEC = 21600 // 6時間
+
+// スキーマ移行は本来一度きりの処理だが、毎リクエストで画像URL列を全行読み直していたため
+// 起動時のリクエストが重くなっていた。実行済みをキャッシュして通常時はスキャンごと省く。
+function ensureMigrations_() {
+  const cache = CacheService.getScriptCache()
+  if (cache.get(MIGRATION_CACHE_KEY)) return
+  ensureDishSchemaMigrated_()
+  ensureDriveUrlsMigrated_()
+  cache.put(MIGRATION_CACHE_KEY, '1', MIGRATION_CACHE_TTL_SEC)
+}
+
 function isAuthorized(token) {
   const expected = PropertiesService.getScriptProperties().getProperty('API_TOKEN')
   return Boolean(expected) && token === expected
@@ -80,8 +93,7 @@ function doGet(e) {
   if (!isAuthorized(e.parameter.token)) return err('Unauthorized')
   const action = e.parameter.action || ''
   try {
-    ensureDishSchemaMigrated_()
-    ensureDriveUrlsMigrated_()
+    ensureMigrations_()
     switch (action) {
       case 'getWeek':              return ok(getWeek(e.parameter.week_id || ''))
       case 'getShoppingList':      return ok(getShoppingList(e.parameter.week_id || ''))
@@ -98,8 +110,7 @@ function doPost(e) {
     const raw  = e.parameter.data || e.postData.contents
     const body = JSON.parse(raw)
     if (!isAuthorized(body.token)) return err('Unauthorized')
-    ensureDishSchemaMigrated_()
-    ensureDriveUrlsMigrated_()
+    ensureMigrations_()
     switch (body.action) {
       case 'generateWeek':     return ok(generateWeek(body.week_id))
       case 'setPreference':    return ok(setPreference(body.dish_name, body.preference, body.week_id, body.day_label, body.dish_id, body.kind, body.recipe, body.ingredients))
@@ -154,9 +165,14 @@ function getSpreadsheet_() {
   return _ss
 }
 
+// 同じ実行内でヘッダー確認を繰り返さないためのメモ（ヘッダーは実行中に変わらない）
+const _hdrChecked = {}
+
 function openOrCreateSheet_(name, hdr) {
   const ss = getSpreadsheet_()
   let sheet = ss.getSheetByName(name)
+  if (sheet && _hdrChecked[name]) return sheet
+  _hdrChecked[name] = true
   if (!sheet) {
     sheet = ss.insertSheet(name)
     sheet.appendRow(hdr)
@@ -185,6 +201,12 @@ function cellToStr(val) {
     return `${y}-${m}-${d}`
   }
   return String(val ?? '')
+}
+
+// 読み取りだけのパス用。シートが無ければ空配列を返し、作成のための書き込みAPIを呼ばない。
+function readSheetObjs_(name) {
+  const sheet = getSpreadsheet_().getSheetByName(name)
+  return sheet ? sheetToObjs_(sheet) : []
 }
 
 function sheetToObjs_(sheet) {
@@ -294,10 +316,20 @@ function ensureDriveUrlsMigrated_() {
 //  週の献立（WeekPlan＝曜日メタ情報 / WeekDishes＝献立候補 / Ingredients）
 // ─────────────────────────────────────────
 
+// Preferencesは追記のみで増え続けるが、画面が使うのは料理名ごとの最新の評価だけ。
+// 起動時の転送量とJSONの生成コストを抑えるため、料理名ごとに1件へ畳んで返す。
+function latestPreferences_() {
+  const latest = {}
+  readSheetObjs_(PREF_SHEET).forEach(r => {
+    if (r.dish_name) latest[r.dish_name] = r.preference
+  })
+  return Object.keys(latest).map(name => ({ dish_name: name, preference: latest[name] }))
+}
+
 function getWeek(weekId) {
-  const dayMetaRows = sheetToObjs_(openOrCreateSheet_(WEEK_SHEET, WEEK_HDR)).filter(r => r.week_id === weekId)
-  const dishRows    = sheetToObjs_(openOrCreateSheet_(DISH_SHEET, DISH_HDR)).filter(r => r.week_id === weekId)
-  const ingredients = sheetToObjs_(openOrCreateSheet_(ING_SHEET, ING_HDR)).filter(r => r.week_id === weekId)
+  const dayMetaRows = readSheetObjs_(WEEK_SHEET).filter(r => r.week_id === weekId)
+  const dishRows    = readSheetObjs_(DISH_SHEET).filter(r => r.week_id === weekId)
+  const ingredients = readSheetObjs_(ING_SHEET).filter(r => r.week_id === weekId)
 
   const dishesByDay = {}
   dishRows.forEach(d => {
@@ -325,10 +357,12 @@ function getWeek(weekId) {
   return {
     weekPlan,
     ingredients,
-    styleTags:   getStyleTags(),
-    preferences: sheetToObjs_(openOrCreateSheet_(PREF_SHEET, PREF_HDR)),
-    favorites:   getFavorites(),
+    styleTags:   readSheetObjs_(TAG_SHEET),
+    preferences: latestPreferences_(),
+    favorites:   readSheetObjs_(FAV_SHEET),
     cheatDay:    getCheatDay(),
+    // 手持ち食材も同梱して、起動時のリクエストを2本から1本に減らす
+    stock:       readSheetObjs_(STOCK_SHEET).map(r => ({ ...r, category: categorizeIngredient_(r.name) })),
   }
 }
 
@@ -848,8 +882,9 @@ function extractDishFromText(text) {
 // ─────────────────────────────────────────
 
 function getCheatDay() {
-  const sheet = openOrCreateSheet_(CHEAT_SHEET, CHEAT_HDR)
-  const data  = sheet.getDataRange().getValues()
+  const sheet = getSpreadsheet_().getSheetByName(CHEAT_SHEET)
+  if (!sheet) return ''
+  const data = sheet.getDataRange().getValues()
   return data.length > 1 ? cellToStr(data[1][0]) : ''
 }
 
