@@ -90,7 +90,7 @@ function isAuthorized(idToken) {
 }
 
 function doGet(e) {
-  if (!isAuthorized(e.parameter.id_token)) return err('Unauthorized')
+  if (!isAuthorized(e.parameter.id_token)) return err('Unauthorized: ' + authFailReason_())
   const action = e.parameter.action || ''
   try {
     ensureMigrations_()
@@ -109,7 +109,7 @@ function doPost(e) {
   try {
     const raw  = e.parameter.data || e.postData.contents
     const body = JSON.parse(raw)
-    if (!isAuthorized(body.id_token)) return err('Unauthorized')
+    if (!isAuthorized(body.id_token)) return err('Unauthorized: ' + authFailReason_())
     ensureMigrations_()
     switch (body.action) {
       case 'generateWeek':     return ok(generateWeek(body.week_id))
