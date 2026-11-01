@@ -1,5 +1,6 @@
+import { withIdToken } from '../auth/googleAuth'
+
 export const GAS_URL = import.meta.env.VITE_GAS_URL || ''
-const API_TOKEN = import.meta.env.VITE_API_TOKEN || ''
 export const isGasReady = () => Boolean(GAS_URL)
 
 const RETRY_DELAYS_MS = [400, 1200]
@@ -28,18 +29,26 @@ async function parseJsonWithRetry_(fetchFn) {
 
 async function get(action, params = {}) {
   if (!GAS_URL) throw new Error('GAS_URLが設定されていません')
-  const url = new URL(GAS_URL)
-  url.searchParams.set('action', action)
-  url.searchParams.set('token', API_TOKEN)
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
-  const json = await parseJsonWithRetry_(() => fetch(url.toString()))
+  const json = await withIdToken((idToken) => {
+    const url = new URL(GAS_URL)
+    url.searchParams.set('action', action)
+    url.searchParams.set('id_token', idToken)
+    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
+    return parseJsonWithRetry_(() => fetch(url.toString()))
+  })
   if (!json.ok) throw new Error(json.error || 'API error')
   return json
 }
 
 async function post(body) {
   if (!GAS_URL) throw new Error('GAS_URLが設定されていません')
-  const payload = JSON.stringify({ ...body, token: API_TOKEN })
+  const json = await withIdToken((idToken) => postOnce_({ ...body, id_token: idToken }))
+  if (!json.ok) throw new Error(json.error || 'API error')
+  return json
+}
+
+async function postOnce_(bodyWithToken) {
+  const payload = JSON.stringify(bodyWithToken)
   // POSTは副作用があるため、レスポンスが得られなかった（fetch自体が失敗した）場合のみ再試行し、
   // レスポンスは届いたがJSONとして読めない場合（＝サーバー側の処理は走った可能性がある）は再試行しない。
   let res
@@ -58,14 +67,11 @@ async function post(body) {
     })
   }
   const text = await res.text()
-  let json
   try {
-    json = JSON.parse(text)
+    return JSON.parse(text)
   } catch (e) {
     throw new Error('サーバーからの応答を読み取れませんでした。通信状況をご確認のうえ、内容が反映されているかもご確認ください。')
   }
-  if (!json.ok) throw new Error(json.error || 'API error')
-  return json
 }
 
 export const gasApi = {

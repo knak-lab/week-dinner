@@ -84,13 +84,13 @@ function ensureMigrations_() {
   cache.put(MIGRATION_CACHE_KEY, '1', MIGRATION_CACHE_TTL_SEC)
 }
 
-function isAuthorized(token) {
-  const expected = PropertiesService.getScriptProperties().getProperty('API_TOKEN')
-  return Boolean(expected) && token === expected
+// 認証は Auth.gs（Googleログイン）。IDトークンが正しく、許可されたメールのときだけ通す
+function isAuthorized(idToken) {
+  return Boolean(verifyIdToken_(idToken))
 }
 
 function doGet(e) {
-  if (!isAuthorized(e.parameter.token)) return err('Unauthorized')
+  if (!isAuthorized(e.parameter.id_token)) return err('Unauthorized')
   const action = e.parameter.action || ''
   try {
     ensureMigrations_()
@@ -109,7 +109,7 @@ function doPost(e) {
   try {
     const raw  = e.parameter.data || e.postData.contents
     const body = JSON.parse(raw)
-    if (!isAuthorized(body.token)) return err('Unauthorized')
+    if (!isAuthorized(body.id_token)) return err('Unauthorized')
     ensureMigrations_()
     switch (body.action) {
       case 'generateWeek':     return ok(generateWeek(body.week_id))
