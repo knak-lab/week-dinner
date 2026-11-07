@@ -8,6 +8,11 @@ const WEEK_SHEET  = 'WeekPlan'
 const WEEK_HDR    = ['week_id', 'day_label', 'date', 'cheat', 'tags']
 const DISH_SHEET  = 'WeekDishes'
 const DISH_HDR    = ['week_id', 'day_label', 'dish_id', 'order', 'kind', 'name', 'recipe', 'chosen', 'image_url']
+// 1日の献立の構成（この順で並べる）：主菜・副菜・スープ
+const DISH_KINDS  = ['main', 'side', 'soup']
+function normalizeDishKind_(kind) {
+  return DISH_KINDS.indexOf(kind) === -1 ? 'main' : kind
+}
 const ING_SHEET    = 'Ingredients'
 const ING_HDR      = ['week_id', 'day_label', 'dish_id', 'ingredient_name', 'amount', 'note']
 const TAG_SHEET    = 'StyleTags'
@@ -338,7 +343,7 @@ function getWeek(weekId) {
   })
   Object.keys(dishesByDay).forEach(day => {
     dishesByDay[day].sort((a, b) => {
-      if (a.kind !== b.kind) return a.kind === 'main' ? -1 : 1
+      if (a.kind !== b.kind) return DISH_KINDS.indexOf(normalizeDishKind_(a.kind)) - DISH_KINDS.indexOf(normalizeDishKind_(b.kind))
       return Number(a.order) - Number(b.order)
     })
   })
@@ -425,7 +430,7 @@ function saveDishIngredients_(weekId, dayLabel, dishId, ingredients) {
 function addDish(weekId, dayLabel, kind, name, recipe, ingredients, imageUrl) {
   if (!weekId || !dayLabel) return { error: 'week_id and day_label are required' }
   if (!name) return { error: 'name is required' }
-  const normKind = kind === 'side' ? 'side' : 'main'
+  const normKind = normalizeDishKind_(kind)
 
   ensureDayMeta_(weekId, dayLabel)
   setDayNotCheat_(weekId, dayLabel)
@@ -601,7 +606,7 @@ function setPreference(dishName, preference, weekId, dayLabel, dishId, kind, rec
   })
 
   if (preference === 'like') {
-    addFavorite_(dishName, recipe, ingredients, kind === 'side' ? 'side' : 'main')
+    addFavorite_(dishName, recipe, ingredients, normalizeDishKind_(kind))
   } else if (preference === 'dislike') {
     removeFavoriteByMain_(dishName)
   }
@@ -758,7 +763,7 @@ function extractDishFromImage(images) {
     images.length > 1
       ? 'これらの画像は同じ料理レシピ・献立を撮影した複数枚のスクリーンショットです（1枚に収まらないため分割撮影）。全体を1つのレシピとしてまとめて読み取ってください。'
       : 'この画像は料理のレシピ・献立のスクリーンショットです。',
-    '写っている料理（主菜・副菜のどちらか1品）について、以下のJSON形式のみを出力してください（説明文は一切不要）。',
+    '写っている料理（主菜・副菜・スープのどれか1品）について、以下のJSON形式のみを出力してください（説明文は一切不要）。',
     '複数の料理が写っている場合は、中心となる1品のみを対象にしてください。',
     '読み取れない項目は空文字または空配列にしてください。料理が全く写っていない場合はmainを空文字にしてください。',
     '',
@@ -825,7 +830,7 @@ function extractDishFromText(text) {
 
   const prompt = [
     '以下はSNS（Instagramなど）の料理レシピ投稿のキャプション文です。',
-    'ハッシュタグや宣伝文句は無視し、実際のレシピ情報（主菜・副菜のどちらか1品）のみを抽出して、',
+    'ハッシュタグや宣伝文句は無視し、実際のレシピ情報（主菜・副菜・スープのどれか1品）のみを抽出して、',
     '以下のJSON形式のみを出力してください（説明文は一切不要）。',
     '読み取れない項目は空文字または空配列にしてください。レシピ情報が全く含まれない場合はmainを空文字にしてください。',
     '',
@@ -1063,7 +1068,7 @@ function getShoppingList(weekId) {
   const chosenDishIdsByDay = {}
   Object.entries(dishesByDay).forEach(([day, list]) => {
     const ids = []
-    ;['main', 'side'].forEach(kind => {
+    DISH_KINDS.forEach(kind => {
       const ofKind = list.filter(d => d.kind === kind)
       if (ofKind.length === 0) return
       const chosen = ofKind.find(d => d.chosen === 'true' || d.chosen === true)
@@ -1193,7 +1198,7 @@ function generateWeek(weekId) {
   const ingSheet  = openOrCreateSheet_(ING_SHEET, ING_HDR)
   const metaSheet = openOrCreateSheet_(WEEK_SHEET, WEEK_HDR)
 
-  // 「これをつくる」で確定済みの献立は、日×主菜/副菜ごとに再作成しても変わらないように保持する
+  // 「これをつくる」で確定済みの献立は、日×主菜/副菜/スープごとに再作成しても変わらないように保持する
   // （過ぎた曜日の献立を丸ごと保持する際にも使う）
   const existingMeta        = sheetToObjs_(metaSheet).filter(r => r.week_id === weekId)
   const existingDishes      = sheetToObjs_(dishSheet).filter(d => d.week_id === weekId)
@@ -1208,13 +1213,14 @@ function generateWeek(weekId) {
       }
     }
   })
-  const keptNames = { main: [], side: [] }
+  const keptNames = { main: [], side: [], soup: [] }
   Object.values(keptByDayKind).forEach(k => {
     if (keptNames[k.dish.kind]) keptNames[k.dish.kind].push(k.dish.name)
   })
 
   const mainPool = prioritizeByStock_(shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'main' && keptNames.main.indexOf(f.main) === -1)))
   const sidePool = prioritizeByStock_(shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'side' && keptNames.side.indexOf(f.main) === -1)))
+  const soupPool = prioritizeByStock_(shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'soup' && keptNames.soup.indexOf(f.main) === -1)))
 
   const days = buildWeekDates_(weekId)
   const cheatIdx = DAY_LABELS.indexOf(cheatDay)
@@ -1252,8 +1258,10 @@ function generateWeek(weekId) {
 
   let mainCursor = 0
   let sideCursor = 0
+  let soupCursor = 0
   const nextMain = () => mainCursor < mainPool.length ? mainPool[mainCursor++] : null
   const nextSide = () => sideCursor < sidePool.length ? sidePool[sideCursor++] : null
+  const nextSoup = () => soupCursor < soupPool.length ? soupPool[soupCursor++] : null
   const candidateIngredients = c => {
     try { return JSON.parse(c.ingredients_json || '[]') } catch (ex) { return [] }
   }
@@ -1326,6 +1334,7 @@ function generateWeek(weekId) {
     }
     fillKind(dayLabel, 'main', nextMain)
     fillKind(dayLabel, 'side', nextSide)
+    fillKind(dayLabel, 'soup', nextSoup)
   })
 
   metaSheet.getRange(metaSheet.getLastRow() + 1, 1, metaRows.length, WEEK_HDR.length).setValues(metaRows)

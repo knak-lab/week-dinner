@@ -4,9 +4,11 @@ const DAY_LABELS = ['月', '火', '水', '木', '金', '土', '日']
 
 const dayLabelFull_ = (label) => `${label}曜`
 
-const KIND_LABEL = { main: '主菜', side: '副菜' }
+const KIND_LABEL = { main: '主菜', side: '副菜', soup: 'スープ' }
 
-const favoriteMatchesKind_ = (f, kind) => (kind === 'side' ? f.category === 'side' : f.category !== 'side')
+// 副菜・スープはそのカテゴリの候補だけ、主菜はそれ以外（作り置き等も含む）を対象にする
+const favoriteMatchesKind_ = (f, kind) =>
+  kind === 'main' ? f.category !== 'side' && f.category !== 'soup' : f.category === kind
 
 function RecipeModal({ dayLabel, kind, name, imageUrl, recipe, ingredients, onClose }) {
   return (
@@ -303,8 +305,9 @@ function DayCard({ day, preferences, onChooseDish, onSetPreference, onShowRecipe
   const isCheat = day.cheat === 'true' || day.cheat === true
   const tags = (day.tags || '').split(',').filter(Boolean)
   const dishes = day.dishes || []
-  const mainDishes = dishes.filter((d) => d.kind !== 'side')
+  const mainDishes = dishes.filter((d) => d.kind !== 'side' && d.kind !== 'soup')
   const sideDishes = dishes.filter((d) => d.kind === 'side')
+  const soupDishes = dishes.filter((d) => d.kind === 'soup')
 
   return (
     <div className={`day-card${isCheat ? ' day-card--cheat' : ''}`}>
@@ -329,6 +332,11 @@ function DayCard({ day, preferences, onChooseDish, onSetPreference, onShowRecipe
       />
       <DishSection
         kind="side" day={day} dishes={sideDishes} preferences={preferences}
+        onChooseDish={onChooseDish} onSetPreference={onSetPreference}
+        onShowRecipe={onShowRecipe} onOpenMove={onOpenMove} onOpenAddChoice={onOpenAddChoice}
+      />
+      <DishSection
+        kind="soup" day={day} dishes={soupDishes} preferences={preferences}
         onChooseDish={onChooseDish} onSetPreference={onSetPreference}
         onShowRecipe={onShowRecipe} onOpenMove={onOpenMove} onOpenAddChoice={onOpenAddChoice}
       />
