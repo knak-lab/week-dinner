@@ -1220,7 +1220,8 @@ function generateWeek(weekId) {
 
   const mainPool = prioritizeByStock_(shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'main' && keptNames.main.indexOf(f.main) === -1)))
   const sidePool = prioritizeByStock_(shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'side' && keptNames.side.indexOf(f.main) === -1)))
-  const soupPool = prioritizeByStock_(shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'soup' && keptNames.soup.indexOf(f.main) === -1)))
+  // スープは候補が少ないことが多いので、確定済みのものも含めて週の中で使い回す
+  const soupPool = prioritizeByStock_(shuffle_(candidates.filter(f => normalizeCandidateCategory_(f.category) === 'soup')))
 
   const days = buildWeekDates_(weekId)
   const cheatIdx = DAY_LABELS.indexOf(cheatDay)
@@ -1261,7 +1262,7 @@ function generateWeek(weekId) {
   let soupCursor = 0
   const nextMain = () => mainCursor < mainPool.length ? mainPool[mainCursor++] : null
   const nextSide = () => sideCursor < sidePool.length ? sidePool[sideCursor++] : null
-  const nextSoup = () => soupCursor < soupPool.length ? soupPool[soupCursor++] : null
+  const nextSoup = () => soupPool.length > 0 ? soupPool[soupCursor++ % soupPool.length] : null
   const candidateIngredients = c => {
     try { return JSON.parse(c.ingredients_json || '[]') } catch (ex) { return [] }
   }
@@ -1293,10 +1294,13 @@ function generateWeek(weekId) {
       })
     }
 
+    // 同じ日・同じ枠に同じ料理が2つ並ばないようにする（スープの使い回し用）
+    const usedNames = kept ? [kept.dish.name] : []
     for (let slot = 0; slot < SLOTS_PER_KIND; slot++) {
       if (kept && keptOrder === slot) continue
       const c = nextCandidate()
-      if (!c) continue
+      if (!c || usedNames.indexOf(c.main) !== -1) continue
+      usedNames.push(c.main)
 
       const dishId = Utilities.getUuid()
       dishRows.push(DISH_HDR.map(col => {
