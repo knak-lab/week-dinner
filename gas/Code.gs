@@ -730,12 +730,58 @@ function driveThumbnailUrl_(fileId) {
   return 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w1000'
 }
 
+// ─────────────────────────────────────────
+//  料理の写真の保存先フォルダ
+//  マイドライブ直下に散らばらないよう、専用フォルダにまとめる。
+//  フォルダIDはスクリプトプロパティ IMAGE_FOLDER_ID に覚えておく
+//  （フォルダ名を変えたり別の場所へ動かしたりしても、同じフォルダを使い続ける）。
+//  フォルダ自体は共有しない。画像は1枚ずつ「リンクを知っている全員が閲覧可」にする。
+// ─────────────────────────────────────────
+const IMAGE_FOLDER_NAME = '料理の鉄人_画像'
+const IMAGE_FILE_RE = /^(thumbnail|recipe)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jpg$/
+
+function imageFolder_() {
+  const props = PropertiesService.getScriptProperties()
+  const savedId = props.getProperty('IMAGE_FOLDER_ID')
+  if (savedId) {
+    try {
+      const folder = DriveApp.getFolderById(savedId)
+      if (!folder.isTrashed()) return folder
+    } catch (ex) { /* 消されていたら作り直す */ }
+  }
+  const folder = DriveApp.createFolder(IMAGE_FOLDER_NAME)
+  props.setProperty('IMAGE_FOLDER_ID', folder.getId())
+  return folder
+}
+
+// 【1回だけGASエディタで実行】マイドライブ直下にある料理の写真
+// （thumbnail-….jpg / recipe-….jpg）を専用フォルダへ移動する。
+// 移動してもファイルIDは変わらないので、アプリの写真はそのまま表示される。
+// 数が多くて時間切れになったら、もう一度実行すれば続きから移動する。
+function moveImagesToFolder() {
+  const started = Date.now()
+  const folder = imageFolder_()
+  const files = DriveApp.getRootFolder().getFiles()
+  let moved = 0
+  while (files.hasNext()) {
+    if (Date.now() - started > 5 * 60 * 1000) {
+      Logger.log(moved + ' 枚を移動しました。まだ残っているので、もう一度 moveImagesToFolder を実行してください。')
+      return
+    }
+    const file = files.next()
+    if (!IMAGE_FILE_RE.test(file.getName())) continue
+    file.moveTo(folder)
+    moved++
+  }
+  Logger.log(moved + ' 枚を「' + folder.getName() + '」フォルダへ移動しました。すべて完了です。')
+}
+
 function uploadImageToDrive_(base64, mimeType) {
   if (!base64) return ''
   try {
     const bytes = Utilities.base64Decode(base64)
     const blob = Utilities.newBlob(bytes, mimeType || 'image/jpeg', 'thumbnail-' + Utilities.getUuid() + '.jpg')
-    const file = DriveApp.createFile(blob)
+    const file = imageFolder_().createFile(blob)
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
     return driveThumbnailUrl_(file.getId())
   } catch (ex) {
